@@ -1,3 +1,4 @@
+import numpy as np
 from typing import List, Iterable
 from dataclasses import dataclass
 
@@ -11,8 +12,6 @@ from agf.utility import (read_fc,
                          flatten_list)
 
 from agf.structure import Layer, CDCStructure, StructureError
-
-import numpy as np
 
 
 @dataclass
