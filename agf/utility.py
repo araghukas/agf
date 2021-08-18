@@ -40,9 +40,9 @@ def read_fc(force_constants_filename: str) -> np.ndarray:
 def flatten_list(nested_list: List[list]) -> list:
     """return a 1D list from an arbitrarily nested list"""
 
-    def _flatten_list_helper(some_list: List, _flat_list: list) -> list:
+    def _flatten_list_helper(_nested_list: List, _flat_list: list) -> list:
         """helper function for `flatten_list` recursion"""
-        for _item in some_list:
+        for _item in _nested_list:
             if type(_item) is list:
                 _flatten_list_helper(_item, _flat_list)
             else:

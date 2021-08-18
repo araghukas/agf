@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Iterable
+from typing import List, Iterable, Dict
 from dataclasses import dataclass
 
 from agf.utility import (read_fc,
@@ -11,7 +11,7 @@ from agf.utility import (read_fc,
                          unfold_matrix,
                          flatten_list)
 
-from agf.structure import Layer, CDCStructure, StructureError
+from agf.structure import Layer, StructureSystem
 
 
 @dataclass
@@ -94,22 +94,22 @@ class AGF(HarmonicMatrix):
     """
 
     @property
-    def force_constants(self):
+    def force_constants(self) -> np.ndarray:
         """array of all force constants between every pair of atoms"""
         return self._force_constants
 
     @property
-    def index_map(self):
+    def index_map(self) -> Dict[int, int]:
         """a dictionary {atom_id: index in force_constants}"""
         return self._index_map
 
     @property
-    def structure(self):
+    def structure(self) -> StructureSystem:
         """a contact-device-contact structure outlining layers and constituent atoms"""
         return self._struct
 
     def __init__(self,
-                 struct: CDCStructure,
+                 struct: StructureSystem,
                  force_constants_file: str):
         """
         Sort force constants and prepare harmonic matrices.
@@ -150,7 +150,7 @@ class AGF(HarmonicMatrix):
         self._force_constants = fcs
 
     def _set_harmonic_matrices(self) -> None:
-        """Assign Harmonic and connection matrices according to AGF formulation"""
+        """assign harmonic and connection matrices according to AGF formulation"""
         ids = self.structure.section_ids
 
         n1 = sum(len(layer_ids) for layer_ids in ids[0])
@@ -160,8 +160,8 @@ class AGF(HarmonicMatrix):
         folded_fcs = fold_matrix(self._force_constants, 3, 3)
 
         N = n1 + n2 + n3
-        if not (folded_fcs.shape[:2] == (N, N)):
-            raise StructureError("force constants shape does not match structure")
+        if folded_fcs.shape[:2] != (N, N):
+            raise RuntimeError("force constants shape does not match structure")
 
         # first contact
         a11 = 0
@@ -221,6 +221,7 @@ class AGF(HarmonicMatrix):
         S1 = t1 @ g1s @ t1_H
         S2 = t2 @ g2s @ t2_H
 
+        """final matrix inversion for Green's function"""
         # compute the device Green's function
         Iw = omega * np.eye(self._Hd.shape[0])
         G = np.linalg.inv(Iw - self._Hd - S1 - S2)
@@ -236,27 +237,41 @@ class AGF(HarmonicMatrix):
 
 class SanchoDecimation:
     """
-    Calculates surface and bulk Green's functions given a sorted harmonic matrix
+    Calculates surface and bulk Green's functions given a sorted harmonic matrix, see:
+
+        Sancho et al. Journal of Physics F: Metal Physics, vol. 15, no. 4, Apr. 1985, pp. 851–58.
     """
+    @property
+    def max_iter(self) -> int:
+        """maximum number of iterations before G00 is returned"""
+        return self._max_iter
+
+    @max_iter.setter
+    def max_iter(self, i):
+        self._max_iter = int(i)
 
     @property
-    def iter(self) -> int:
-        """iteration counter"""
-        return self._iter
+    def iter_tol(self) -> float:
+        """minimum value of the change between iterations before G00 is returned"""
+        return self._iter_tol
 
-    @property
-    def ns(self) -> List[int]:
-        """number of atoms in each layer; used to index sorted harmonic matrix"""
-        return self._ns
+    @iter_tol.setter
+    def iter_tol(self, t: float):
+        if t < 0:
+            raise ValueError("tolerance must be non-negative")
+        self._iter_tol = t
 
     def __init__(self,
                  harmonic_matrix: np.ndarray,
                  layers: List[Layer]):
         self.harmonic_matrix = harmonic_matrix
         self.layers = layers
-        self._iter = 0
         self._es_difference = np.inf
         self._ns = [len(layer.ids) for layer in self.layers]
+
+        # property defaults
+        self._iter_tol = np.finfo(float).eps
+        self._max_iter = 100
 
     def __post_init__(self):
         m, n, k, l = self.harmonic_matrix.shape
@@ -279,36 +294,38 @@ class SanchoDecimation:
     def _calculate_G00_at_omega(self, omega: float, delta: float) -> np.ndarray:
         """compute surface Green's function at given frequency with given broadening"""
         omega += 1j * delta
-        e0 = self._get_H_matrix(0, 0)
-        es0 = es1 = e0
+        h0 = self._get_H_matrix(0, 0)
+        h0s = h1s = h0
         a0 = self._get_H_matrix(1, 0)
         b0 = a0.conj().T
-        omega *= np.eye(e0.shape[0])
+        omega *= np.eye(h0.shape[0])
 
-        min_es = np.finfo(float).eps
-        while self._es_difference > min_es:
-            Gb = np.linalg.inv(omega - e0)
+        """main calculation loop"""
+        hs_change = np.inf
+        count = 0
+        while hs_change > self._iter_tol and count < self._max_iter:
 
-            # to avoid redundancy
-            A = a0 @ Gb
-            B = b0 @ Gb
-            C = A @ b0
-            D = B @ a0
-            # -------------------
+            # some variables to avoid redundancy
+            G_bulk = np.linalg.inv(omega - h0)
+            a0_G = a0 @ G_bulk
+            b0_G = b0 @ G_bulk
+            a0_G_b0 = a0_G @ b0
 
-            a1 = A @ a0
-            b1 = B @ b0
-            e1 = e0 + C + D
-            es1 = es0 + C
+            # Sancho eq. 11
+            a1 = a0_G @ a0
+            b1 = b0_G @ b0
+            h1 = h0 + a0_G_b0 + b0_G @ a0
+            h1s = h0s + a0_G_b0
 
-            self._es_difference = ((es1 - es0)**2).mean(axis=None)
-
+            # prepare next iteration
             a0 = a1
             b0 = b1
-            e0 = e1
-            es0 = es1
+            h0 = h1
+            h0s = h1s
+            hs_change = ((h1s - h0s)**2).mean(axis=None)
+            count += 1
 
-        G00 = np.linalg.inv(omega - es1)
+        G00 = np.linalg.inv(omega - h1s)
         return G00
 
     def _get_H_matrix(self, i: int, j: int) -> np.ndarray:

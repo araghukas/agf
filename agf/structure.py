@@ -20,7 +20,10 @@ class Atom:
 
 @dataclass(frozen=True)
 class Layer:
-    """a numbered layer containing atoms organized by ID and type"""
+    """
+    An ordered group of atoms organized by ID and type.
+    These are stacked to produce structure systems for AGF.
+    """
     number: int
     ids: List[int]
     types: List[int]
@@ -33,6 +36,81 @@ class Layer:
     def __post_init__(self):
         if len(self.ids) != len(self.types):
             raise ValueError("lengths of ids and types lists are not equal")
+
+
+class StructureSystem:
+    """
+    Generic contact-device-contact structure for AGF calculations.
+    Each of the three sections is a list of Layers.
+    """
+
+    @property
+    def layers(self) -> List[Layer]:
+        """list of all layers"""
+        return self._layers
+
+    @property
+    def contact1(self) -> List[Layer]:
+        """list of layers belonging to first contact"""
+        return [self._layers[layer_number] for layer_number in self._c1]
+
+    @property
+    def device(self) -> List[Layer]:
+        """list of layers belonging to device portion"""
+        return [self._layers[layer_number] for layer_number in self._dv]
+
+    @property
+    def contact2(self) -> List[Layer]:
+        """list of layers belonging to second contact"""
+        return [self._layers[layer_number] for layer_number in self._c2]
+
+    @property
+    def section_ids(self) -> List[List[List[int]]]:
+        """list of ids in contact1, device, and contact2 regions"""
+        return [
+            [layer.ids for layer in self.contact1],
+            [layer.ids for layer in self.device],
+            [layer.ids for layer in self.contact2]
+        ]
+
+    def __init__(self, map_file_path: str, data_file_path: str,
+                 b1: int, b2: int):
+        """
+        Initialize a CDC structure using a layer map file and two boundaries
+        to divide the layers into a contact-device-contact structure.
+
+        :param map_file_path: path to layer map file
+        :param b1: largest index of plane in first contact (inclusive)
+        :param b2: largest index of plane in device (inclusive)
+        NOTE: these indices start with 0.
+        """
+
+        self._layers = read_layer_map(map_file_path)
+
+        if not (0 < b1 < b2 < len(self.layers)):
+            raise ValueError("invalid boundary layer indices b1 = %d, b2 = %d"
+                             % (b1, b2))
+
+        self._assign_layers(b1, b2)
+        self._data_map = read_data_file(data_file_path)
+
+    def _assign_layers(self, b1: int, b2: int) -> None:
+        """
+        Based on the boundaries, create lists of layers representing
+        each of three regions.
+        """
+        # first contact: layers [0,b1]
+        self._c1 = [i for i in range(b1 + 1)]
+
+        # device: layers (b1,b2]
+        self._dv = [i for i in range(b1 + 1, b2 + 1)]
+
+        # second contact (b2,N]
+        self._c2 = [i for i in range(b2 + 1, len(self.layers))]
+
+    def locate_atom(self, atom_id: int) -> Atom:
+        """returns Atom object summarizing corresponding line in atoms data file"""
+        return self._data_map[atom_id]
 
 
 def read_layer_map(file_path: str) -> List[Layer]:
@@ -106,79 +184,3 @@ def read_data_file(file_path: str) -> Dict[int, Atom]:
             index += 1
 
     return ids_map
-
-
-class StructureError(Exception):
-    """raised when initializing an invalid CDCStructure instance"""
-    pass
-
-
-class CDCStructure:
-    """
-    Generic contact-device-contact structure for AGF calculations
-    """
-
-    @property
-    def layers(self):
-        """list of all layers"""
-        return self._layers
-
-    @property
-    def contact1(self):
-        """list of layers belonging to first contact"""
-        return [self._layers[layer_number] for layer_number in self._c1]
-
-    @property
-    def device(self):
-        """list of layers belonging to device portion"""
-        return [self._layers[layer_number] for layer_number in self._dv]
-
-    @property
-    def contact2(self):
-        """list of layers belonging to second contact"""
-        return [self._layers[layer_number] for layer_number in self._c2]
-
-    @property
-    def section_ids(self):
-        """list of ids in contact1, device, and contact2 regions"""
-        return [
-            [layer.ids for layer in self.contact1],
-            [layer.ids for layer in self.device],
-            [layer.ids for layer in self.contact2]
-        ]
-
-    def __init__(self, map_file_path: str, data_file_path: str,
-                 b1: int, b2: int):
-        """
-        Initialize a CDC structure using a layer map file and two boundaries
-        to divide the layers into a contact-device-contact structure.
-
-        :param map_file_path: path to layer map file
-        :param b1: largest index of plane in first contact (inclusive)
-        :param b2: largest index of plane in device (inclusive)
-        NOTE: these indices start with 0.
-        """
-
-        self._layers = read_layer_map(map_file_path)
-
-        if not (0 < b1 < b2 < len(self.layers)):
-            raise StructureError("invalid boundary layer indices b1 = %d, b2 = %d"
-                                 % (b1, b2))
-
-        self._assign_layers(b1, b2)
-        self._data_map = read_data_file(data_file_path)
-
-    def _assign_layers(self, b1: int, b2: int) -> None:
-        """create lists of layers representing each of three regions"""
-        # first contact [0, ..., b1]
-        self._c1 = [i for i in range(b1 + 1)]
-
-        # device [b1 + 1, ..., b2]
-        self._dv = [i for i in range(b1 + 1, b2 + 1)]
-
-        # second contact [b2 + 1, ..., N-1]
-        self._c2 = [i for i in range(b2 + 1, len(self.layers))]
-
-    def locate_atom(self, atom_id: int) -> Atom:
-        """returns Atom object summarizing relevant line in atoms data file"""
-        return self._data_map[atom_id]
