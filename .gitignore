@@ -2,3 +2,4 @@
 log.lammps
 tests/
 .idea/
+**/__pycache__/
