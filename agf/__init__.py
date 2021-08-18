@@ -95,7 +95,7 @@ class AGF(HarmonicMatrix):
 
     @property
     def force_constants(self) -> np.ndarray:
-        """array of all force constants between every pair of atoms"""
+        """array of all force constants between every pair of atoms [eV/Angstrom]"""
         return self._force_constants
 
     @property
@@ -193,8 +193,8 @@ class AGF(HarmonicMatrix):
         self._H2 = unfold_matrix(folded_fcs[a22:b22, a22:b22])
 
         # decimators for computing uncoupled contact Green's functions
-        self._decimate_g1 = SanchoDecimation(self._H1, self.structure.contact1)
-        self._decimate_g2 = SanchoDecimation(self._H2, self.structure.contact2)
+        self._decimate_g1 = Decimation(self._H1, self.structure.contact1)
+        self._decimate_g2 = Decimation(self._H2, self.structure.contact2)
 
     def compute(self, omega: float, delta: float) -> AGFResult:
         """
@@ -235,12 +235,13 @@ class AGF(HarmonicMatrix):
         return AGFResult(omega, delta, G, Gamma1, Gamma2, A1, A2)
 
 
-class SanchoDecimation:
+class Decimation:
     """
     Calculates surface and bulk Green's functions given a sorted harmonic matrix, see:
 
         Sancho et al. Journal of Physics F: Metal Physics, vol. 15, no. 4, Apr. 1985, pp. 851–58.
     """
+
     @property
     def max_iter(self) -> int:
         """maximum number of iterations before G00 is returned"""
@@ -273,21 +274,6 @@ class SanchoDecimation:
         self._iter_tol = np.finfo(float).eps
         self._max_iter = 100
 
-    def __post_init__(self):
-        m, n, k, l = self.harmonic_matrix.shape
-        if not m == n:
-            raise ValueError("harmonic matrix is not square")
-        if not k == l == 3:
-            raise ValueError("harmonic matrix elements must be 3x3 matrices")
-
-        all_ids = []
-        for layer in self.layers:
-            all_ids += layer.ids
-        unique_ids = np.unique(all_ids)
-        if len(unique_ids) != m:
-            raise ValueError("not enough unique ids for harmonic matrix ({:d}x{:d})"
-                             .format(m, n))
-
     def __call__(self, omega: float, delta: float) -> np.ndarray:
         return self._calculate_G00_at_omega(omega, delta)
 
@@ -304,7 +290,6 @@ class SanchoDecimation:
         hs_change = np.inf
         count = 0
         while hs_change > self._iter_tol and count < self._max_iter:
-
             # some variables to avoid redundancy
             G_bulk = np.linalg.inv(omega - h0)
             a0_G = a0 @ G_bulk
@@ -330,13 +315,15 @@ class SanchoDecimation:
 
     def _get_H_matrix(self, i: int, j: int) -> np.ndarray:
         """get the harmonic matrix between layers i, j"""
-        H = fold_matrix(self.harmonic_matrix, 3, 3)
         a = sum(self._ns[:i])
         b = sum(self._ns[:j])
         c = a + self._ns[i]
         d = b + self._ns[j]
-        sub_matrix = H[a:c, b:d]
-        return unfold_matrix(sub_matrix)
+        a *= 3
+        b *= 3
+        c *= 3
+        d *= 3
+        return self.harmonic_matrix[a: c, b: d]
 
 
 def get_zhang_delta(omegas: Iterable[float]) -> np.ndarray:
