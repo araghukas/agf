@@ -2,6 +2,7 @@
 import os
 import numpy as np
 from typing import List
+from numba import jit
 
 
 def read_fc(force_constants_filename: str) -> np.ndarray:
@@ -55,13 +56,10 @@ def flatten_list(nested_list: List[list]) -> list:
     return flat_list
 
 
+@jit(nopython=True, cache=True)
 def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     """fold a shape (M,N) matrix to shape (m,n,p,q) where m=M/p and n=N/q"""
     M, N = arr.shape
-    if not (M % p == 0 and N % q == 0):
-        raise ValueError(
-            f"can fold matrix of shape ({M},{N}) to shape (n,m,{p},{q})"
-        )
     new_arr = np.zeros((M // p, N // q, p, q))
     for i in range(M):
         for j in range(N):
@@ -75,6 +73,7 @@ def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     return new_arr
 
 
+@jit(nopython=True, cache=True)
 def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     """unfold a shape (m,n,p,q) matrix to shape (M,N) where M=p*m and N=q*n"""
     m, n, p, q = arr.shape
