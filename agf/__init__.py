@@ -206,6 +206,20 @@ class AGF(HarmonicMatrix):
         self._decimate_g1 = Decimation(self._H1, self.structure.contact1, n_dof)
         self._decimate_g2 = Decimation(self._H2, self.structure.contact2, n_dof)
 
+    def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
+        """
+        Set tolerance and maximum number of iterations for decimations
+
+        :param iter_tol: minimum value of change between iterations
+        :param max_iter: maximum number of iterations
+        """
+        if iter_tol is not None:
+            self._decimate_g1.iter_tol = iter_tol
+            self._decimate_g2.iter_tol = iter_tol
+        if max_iter is not None:
+            self._decimate_g1.max_iter = max_iter
+            self._decimate_g2.max_iter = max_iter
+
     def compute(self, omega: float, delta: float) -> AGFResult:
         """
         Calculates uncoupled Greens functions using the decimation technique.
@@ -247,8 +261,10 @@ class AGF(HarmonicMatrix):
 
 class Decimation:
     """
-    Calculates surface and bulk Green's functions given a sorted harmonic matrix, see:
+    Calculates surface and bulk Green's functions given a sorted harmonic matrix,
+    see:
 
+        Guinea, F., et al. Physical Review B, vol. 28, no. 8, Oct. 1983, pp. 4397–402.
         Sancho et al. Journal of Physics F: Metal Physics, vol. 15, no. 4, Apr. 1985, pp. 851–58.
     """
 
@@ -292,42 +308,39 @@ class Decimation:
 
     def _calculate_G00_at_omega(self, omega: float, delta: float) -> np.ndarray:
         """compute surface Green's function at given frequency with given broadening"""
-        omega += 1j * delta
-        h0 = self._get_H_matrix(0, 0)
-        h0s = h1s = h0
-        a0 = self._get_H_matrix(1, 0)
-        b0 = a0.conj().T
-        Iw = omega * np.eye(h0.shape[0])
+        Iw2 = (omega**2 + 1j * delta) * np.eye(self.n_dof * self._ns[0])
+        H00 = self._get_H_submatrix(0, 0)
 
-        """main calculation loop"""
-        hs_change = np.inf
+        # input values
+        Ws = Wb = Iw2 - H00
+        t1 = self._get_H_submatrix(0, 1)
+        t2 = self._get_H_submatrix(1, 0)  # should equal t1.conj().T
+
+        # termination/convergence conditions
+        Ws_change = np.inf
+        Ws_change_min = self._iter_tol
         count = 0
-        while hs_change > self._iter_tol and count < self._max_iter:
-            # some variables to avoid redundancy
-            G_bulk = np.linalg.inv(Iw - h0)
-            a0_G = a0 @ G_bulk
-            b0_G = b0 @ G_bulk
-            a0_G_b0 = a0_G @ b0
+        count_max = self._max_iter
 
-            # Sancho eq. 11
-            a1 = a0_G @ a0
-            b1 = b0_G @ b0
-            h1 = h0 + a0_G_b0 + b0_G @ a0
-            h1s = h0s + a0_G_b0
+        while Ws_change > Ws_change_min and count < count_max:
+            # Guinea eqs. 15
+            Gb = np.linalg.inv(Wb)
+            Gb12 = t1 @ Gb @ t2
+            Gb21 = t2 @ Gb @ t1
 
-            hs_change = ((h1s - h0s)**2).mean(axis=None)
+            Ws0 = Ws
+            Ws = Ws - Gb12
+            Wb = Wb - Gb12 - Gb21
+            t1 = -t1 @ Gb @ t1
+            t2 = -t2 @ Gb @ t2
+
+            Ws_change = np.linalg.norm(Ws0 - Ws) / np.linalg.norm(Ws0)
             count += 1
 
-            # prepare next iteration
-            a0 = a1
-            b0 = b1
-            h0 = h1
-            h0s = h1s
-
-        G00 = np.linalg.inv(omega - h1s)
+        G00 = np.linalg.inv(Ws)
         return G00
 
-    def _get_H_matrix(self, i: int, j: int) -> np.ndarray:
+    def _get_H_submatrix(self, i: int, j: int) -> np.ndarray:
         """get the harmonic matrix between layers i, j"""
         a = sum(self._ns[:i])
         b = sum(self._ns[:j])
@@ -342,7 +355,7 @@ class Decimation:
 
 def get_zhang_delta(omegas: Iterable[float],
                     c1: float = 1e-3,
-                    c2: float = 1e-3,
+                    c2: float = 0.0,
                     max_val: float = None) -> np.ndarray:
     """
     Frequency broadening function, see:
