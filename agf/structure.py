@@ -73,26 +73,32 @@ class StructureSystem:
             [layer.ids for layer in self.contact2]
         ]
 
-    def __init__(self, map_file_path: str, data_file_path: str,
+    def __init__(self, layers: List[Layer], data_map: Dict[int, Atom],
                  b1: int, b2: int):
+        self._layers = layers
+        if not (0 < b1 < b2 < len(self.layers)):
+            raise ValueError("invalid boundary layer indices b1 = %d, b2 = %d"
+                             % (b1, b2))
+        self._assign_layers(b1, b2)
+        self._data_map = data_map
+
+    @classmethod
+    def from_files(cls, map_file_path: str, data_file_path: str,
+                   b1: int, b2: int):
         """
         Initialize a CDC structure using a layer map file and two boundaries
         to divide the layers into a contact-device-contact structure.
 
         :param map_file_path: path to layer map file
+        :param data_file_path: path to atoms data file
         :param b1: largest index of plane in first contact (inclusive)
         :param b2: largest index of plane in device (inclusive)
         NOTE: these indices start with 0.
         """
 
-        self._layers = read_layer_map(map_file_path)
-
-        if not (0 < b1 < b2 < len(self.layers)):
-            raise ValueError("invalid boundary layer indices b1 = %d, b2 = %d"
-                             % (b1, b2))
-
-        self._assign_layers(b1, b2)
-        self._data_map = read_data_file(data_file_path)
+        layers = read_layer_map(map_file_path)
+        data_map = read_data_file(data_file_path)
+        return cls(layers, data_map, b1, b2)
 
     def _assign_layers(self, b1: int, b2: int) -> None:
         """
