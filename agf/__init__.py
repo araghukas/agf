@@ -284,14 +284,14 @@ class Decimation:
         h0s = h1s = h0
         a0 = self._get_H_matrix(1, 0)
         b0 = a0.conj().T
-        omega *= np.eye(h0.shape[0])
+        Iw = omega * np.eye(h0.shape[0])
 
         """main calculation loop"""
         hs_change = np.inf
         count = 0
         while hs_change > self._iter_tol and count < self._max_iter:
             # some variables to avoid redundancy
-            G_bulk = np.linalg.inv(omega - h0)
+            G_bulk = np.linalg.inv(Iw - h0)
             a0_G = a0 @ G_bulk
             b0_G = b0 @ G_bulk
             a0_G_b0 = a0_G @ b0
@@ -302,13 +302,14 @@ class Decimation:
             h1 = h0 + a0_G_b0 + b0_G @ a0
             h1s = h0s + a0_G_b0
 
+            hs_change = ((h1s - h0s)**2).mean(axis=None)
+            count += 1
+
             # prepare next iteration
             a0 = a1
             b0 = b1
             h0 = h1
             h0s = h1s
-            hs_change = ((h1s - h0s)**2).mean(axis=None)
-            count += 1
 
         G00 = np.linalg.inv(omega - h1s)
         return G00
@@ -326,16 +327,20 @@ class Decimation:
         return self.harmonic_matrix[a: c, b: d]
 
 
-def get_zhang_delta(omegas: Iterable[float]) -> np.ndarray:
+def get_zhang_delta(omegas: Iterable[float],
+                    c1: float = 1e-3,
+                    c2: float = 1e-3,
+                    max_val: float = None) -> np.ndarray:
     """
     Frequency broadening function, see:
 
         Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
         Eq. 39
     """
-    omega_max = max(omegas)
+    if max_val is None:
+        max_val = max(omegas)
     omegas = np.asarray(omegas)
-    return 0.001 * (1 - omegas / omega_max) * omegas**2
+    return c1 * ((1.0 + c2) - omegas / max_val) * omegas**2
 
 
 __version__ = "18Aug2021"
