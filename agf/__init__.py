@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Iterable, Dict
+from typing import List, Iterable, Dict, Union, Tuple
 from dataclasses import dataclass
 
 from agf.utility import (read_fc,
@@ -82,7 +82,10 @@ class AGFResult:
 
     @property
     def transmission(self):
-        return np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
+        try:
+            return np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
+        except ValueError:
+            return np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
 
 
 class AGF(HarmonicMatrix):
@@ -110,19 +113,27 @@ class AGF(HarmonicMatrix):
 
     def __init__(self,
                  struct: StructureSystem,
-                 force_constants_file: str):
+                 force_constants: Union[str, np.ndarray],
+                 sort_force_constants: bool = True,
+                 n_dof: int = 3):
         """
         Sort force constants and prepare harmonic matrices.
         """
 
         self._struct = struct
-        self._sort_fcs(force_constants_file)
-        self._set_harmonic_matrices()
+        if type(force_constants) is str:
+            force_constants = read_fc(force_constants)
 
-    def _sort_fcs(self, force_constants_file: str) -> None:
-        """sort force constants matrix to correspond to layer ordering"""
-        fcs = read_fc(force_constants_file)
+        if sort_force_constants:
+            self._force_constants, self._index_map = self._sort_fcs(force_constants)
+        else:
+            self._force_constants = force_constants
+            self._index_map = {i + 1: i for i in range(force_constants.shape[0])}
 
+        self._set_harmonic_matrices(n_dof)
+
+    def _sort_fcs(self, fcs: np.ndarray) -> Tuple[np.ndarray, Dict[int, int]]:
+        """sort force constants matrix to correspond to ordering in structure"""
         rearrange = []
         index_map = {}
         layers_id_sequence = flatten_list(self.structure.section_ids)
@@ -146,10 +157,9 @@ class AGF(HarmonicMatrix):
         # unfold into original shape
         fcs = unfold_matrix(fcs)
 
-        self._index_map = index_map
-        self._force_constants = fcs
+        return fcs, index_map
 
-    def _set_harmonic_matrices(self) -> None:
+    def _set_harmonic_matrices(self, n_dof: int = 3) -> None:
         """assign harmonic and connection matrices according to AGF formulation"""
         ids = self.structure.section_ids
 
@@ -157,7 +167,7 @@ class AGF(HarmonicMatrix):
         n2 = sum(len(layer_ids) for layer_ids in ids[1])
         n3 = sum(len(layer_ids) for layer_ids in ids[2])
 
-        folded_fcs = fold_matrix(self._force_constants, 3, 3)
+        folded_fcs = fold_matrix(self._force_constants, n_dof, n_dof)
 
         N = n1 + n2 + n3
         if folded_fcs.shape[:2] != (N, N):
@@ -193,8 +203,8 @@ class AGF(HarmonicMatrix):
         self._H2 = unfold_matrix(folded_fcs[a22:b22, a22:b22])
 
         # decimators for computing uncoupled contact Green's functions
-        self._decimate_g1 = Decimation(self._H1, self.structure.contact1)
-        self._decimate_g2 = Decimation(self._H2, self.structure.contact2)
+        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, n_dof)
+        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, n_dof)
 
     def compute(self, omega: float, delta: float) -> AGFResult:
         """
@@ -210,7 +220,7 @@ class AGF(HarmonicMatrix):
         g2s = self._decimate_g2(omega, delta)
         m2, n2 = g2s.shape
 
-        # TODO: can slice reduce Hd as well to make this even smaller
+        # TODO: can make smaller, some atoms in one layer don't interact with any in the next
         # extract non-zero sub-matrices
         t1 = slice_top_right(self._tau1, m1, n1)
         t1_H = t1.conj().T
@@ -264,9 +274,12 @@ class Decimation:
 
     def __init__(self,
                  harmonic_matrix: np.ndarray,
-                 layers: List[Layer]):
+                 layers: List[Layer],
+                 n_dof: int = 3):
         self.harmonic_matrix = harmonic_matrix
         self.layers = layers
+        self.n_dof = n_dof
+
         self._es_difference = np.inf
         self._ns = [len(layer.ids) for layer in self.layers]
 
@@ -320,10 +333,10 @@ class Decimation:
         b = sum(self._ns[:j])
         c = a + self._ns[i]
         d = b + self._ns[j]
-        a *= 3
-        b *= 3
-        c *= 3
-        d *= 3
+        a *= self.n_dof
+        b *= self.n_dof
+        c *= self.n_dof
+        d *= self.n_dof
         return self.harmonic_matrix[a: c, b: d]
 
 
