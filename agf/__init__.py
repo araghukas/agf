@@ -15,7 +15,7 @@ from agf.structure import Layer, StructureSystem
 
 
 @dataclass
-class HarmonicMatrix:
+class TotalHarmonicMatrix:
     """
     Represents the sub-matrices of the total harmonic matrix
     for a contact(1)-device(d)-contact(2) structure:
@@ -81,14 +81,15 @@ class AGFResult:
     A2: np.ndarray
 
     @property
-    def transmission(self):
+    def transmission(self) -> float:
+        """transmission function at omega"""
         try:
-            return np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
+            return float(np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T))
         except ValueError:
-            return np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
+            return float(np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T))
 
 
-class AGF(HarmonicMatrix):
+class AGF(TotalHarmonicMatrix):
     """
     Atomistic Green's Function method calculator.
 
@@ -203,8 +204,8 @@ class AGF(HarmonicMatrix):
         self._H2 = unfold_matrix(folded_fcs[a22:b22, a22:b22])
 
         # decimators for computing uncoupled contact Green's functions
-        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, n_dof)
-        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, n_dof)
+        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, n_dof)
+        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, n_dof)
 
     def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
         """
@@ -270,7 +271,7 @@ class Decimation:
 
     @property
     def max_iter(self) -> int:
-        """maximum number of iterations before G00 is returned"""
+        """maximum number of iterations before gs is returned"""
         return self._max_iter
 
     @max_iter.setter
@@ -279,7 +280,7 @@ class Decimation:
 
     @property
     def iter_tol(self) -> float:
-        """minimum value of the change between iterations before G00 is returned"""
+        """minimum value of the change between iterations before gs is returned"""
         return self._iter_tol
 
     @iter_tol.setter
@@ -291,37 +292,62 @@ class Decimation:
     def __init__(self,
                  harmonic_matrix: np.ndarray,
                  layers: List[Layer],
+                 surface_index: int,
                  n_dof: int = 3):
-        self.harmonic_matrix = harmonic_matrix
-        self.layers = layers
-        self.n_dof = n_dof
 
-        self._es_difference = np.inf
-        self._ns = [len(layer.ids) for layer in self.layers]
+        self._harmonic_matrix = harmonic_matrix
+        self._layers = layers
+        self._ns = [len(layer.ids) for layer in self._layers]
+        if n_dof > 0:
+            self._n_dof = n_dof
+        else:
+            raise ValueError("number of degrees of freedom must be a positive integer.")
 
         # property defaults
         self._iter_tol = np.finfo(float).eps
         self._max_iter = 100
+        self._inverse_order = False
+
+        # set matrices Hs, tau1, tau2
+        self._set_matrices(surface_index)
+
+    def _set_matrices(self, surface_index: int) -> None:
+        """assign sub-matrices of harmonic constants"""
+        N_layers = len(self._layers)
+        surface_index %= N_layers
+        if not (surface_index == 0 or surface_index == N_layers - 1):
+            raise ValueError("surface index does not correspond to and edge layer.")
+
+        if surface_index != 0:
+            self._harmonic_matrix = np.flip(self._harmonic_matrix)
+            self._layers.reverse()
+            self._inverse_order = True
+
+        self._H00 = self._get_H_submatrix(0, 0)
+        self._t1 = self._get_H_submatrix(0, 1)
+        self._t2 = self._get_H_submatrix(1, 0)
 
     def __call__(self, omega: float, delta: float) -> np.ndarray:
-        return self._calculate_G00_at_omega(omega, delta)
+        gs = self._calculate_gs_at_omega(omega, delta)
+        if self._inverse_order:
+            return np.flip(gs)
+        return gs
 
-    def _calculate_G00_at_omega(self, omega: float, delta: float) -> np.ndarray:
+    def _calculate_gs_at_omega(self, omega: float, delta: float) -> np.ndarray:
         """compute surface Green's function at given frequency with given broadening"""
-        Iw2 = (omega**2 + 1j * delta) * np.eye(self.n_dof * self._ns[0])
-        H00 = self._get_H_submatrix(0, 0)
+        Iw2 = (omega**2 + 1j * delta) * np.eye(self._n_dof * self._ns[0])
+        H00 = self._H00
 
         # input values
         Ws = Wb = Iw2 - H00
-        t1 = self._get_H_submatrix(0, 1)
-        t2 = self._get_H_submatrix(1, 0)  # should equal t1.conj().T
+        t1 = self._t1
+        t2 = self._t2
 
         # termination/convergence conditions
         Ws_change = np.inf
         Ws_change_min = self._iter_tol
         count = 0
         count_max = self._max_iter
-
         while Ws_change > Ws_change_min and count < count_max:
             # Guinea eqs. 15
             Gb = np.linalg.inv(Wb)
@@ -346,11 +372,11 @@ class Decimation:
         b = sum(self._ns[:j])
         c = a + self._ns[i]
         d = b + self._ns[j]
-        a *= self.n_dof
-        b *= self.n_dof
-        c *= self.n_dof
-        d *= self.n_dof
-        return self.harmonic_matrix[a: c, b: d]
+        a *= self._n_dof
+        b *= self._n_dof
+        c *= self._n_dof
+        d *= self._n_dof
+        return self._harmonic_matrix[a: c, b: d]
 
 
 def get_zhang_delta(omegas: Iterable[float],
