@@ -84,9 +84,10 @@ class AGFResult:
     def transmission(self) -> float:
         """transmission function at omega"""
         try:
-            return float(np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T))
+            trans = np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
         except ValueError:
-            return float(np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T))
+            trans = np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
+        return float(trans)
 
 
 class AGF(TotalHarmonicMatrix):
@@ -243,13 +244,13 @@ class AGF(TotalHarmonicMatrix):
         t2_H = t2.conj().T
 
         # compute self-energy matrices
-        S1 = t1 @ g1s @ t1_H
-        S2 = t2 @ g2s @ t2_H
+        se1 = t1 @ g1s @ t1_H
+        se2 = t2 @ g2s @ t2_H
 
         """final matrix inversion for Green's function"""
         # compute the device Green's function
-        Iw = omega * np.eye(self._Hd.shape[0])
-        G = np.linalg.inv(Iw - self._Hd - S1 - S2)
+        w2I = (omega**2 + 1j * delta) * np.eye(self._Hd.shape[0])
+        G = np.linalg.inv(w2I - self._Hd - se1 - se2)
 
         # compute derived quantities
         A1 = 1j * (g1s - g1s.conj().T)
@@ -335,13 +336,13 @@ class Decimation:
 
     def _calculate_gs_at_omega(self, omega: float, delta: float) -> np.ndarray:
         """compute surface Green's function at given frequency with given broadening"""
-        Iw2 = (omega**2 + 1j * delta) * np.eye(self._n_dof * self._ns[0])
+        w2I = (omega**2 + 1j * delta) * np.eye(self._n_dof * self._ns[0])
         H00 = self._H00
 
         # input values
-        Ws = Wb = Iw2 - H00
-        t1 = self._t1
-        t2 = self._t2
+        Ws = Wb = w2I - H00  # symmetry assumed
+        t1 = -self._t1
+        t2 = -self._t2
 
         # termination/convergence conditions
         Ws_change = np.inf
@@ -354,13 +355,13 @@ class Decimation:
             Gb12 = t1 @ Gb @ t2
             Gb21 = t2 @ Gb @ t1
 
-            Ws0 = Ws
+            Ws_prev = Ws
             Ws = Ws - Gb12
             Wb = Wb - Gb12 - Gb21
             t1 = -t1 @ Gb @ t1
             t2 = -t2 @ Gb @ t2
 
-            Ws_change = np.linalg.norm(Ws0 - Ws) / np.linalg.norm(Ws0)
+            Ws_change = np.linalg.norm(Ws - Ws_prev) / np.linalg.norm(Ws_prev)
             count += 1
 
         G00 = np.linalg.inv(Ws)
