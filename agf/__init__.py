@@ -175,6 +175,7 @@ class AGF(_HarmonicMatrices):
         g2s = self._decimate_g2(omega, delta)
         m1, n1 = g1s.shape
         m2, n2 = g2s.shape
+        md = self._Hd.shape[0]
 
         # TODO: can make smaller, some atoms in one layer don't interact with any in the next
         # extract non-zero sub-matrices
@@ -187,8 +188,14 @@ class AGF(_HarmonicMatrices):
         se1 = t1 @ g1s @ t1_H
         se2 = t2 @ g2s @ t2_H
 
+        # pad the self energy matrices if necessary
+        if m1 != md or n1 != md:
+            se1 = np.pad(t1 @ g1s @ t1_H, ((0, md - m1), (0, md - n1)), constant_values=0.j)
+        if m2 != md or n2 != md:
+            se2 = np.pad(t2 @ g2s @ t2_H, ((md - m2, 0), (md - n2, 0)), constant_values=0.j)
+
         # compute the device Green's function
-        w2I = (omega**2 + 1j * delta) * np.eye(self._Hd.shape[0])
+        w2I = (omega**2 + 1j * delta) * np.eye(md)
         G = np.linalg.inv(w2I - self._Hd - se1 - se2)
 
         # compute derived quantities
