@@ -1,268 +1,14 @@
 import numpy as np
-from typing import List, Iterable, Dict, Union, Tuple
+from warnings import warn
+from typing import List, Iterable, Union
 from dataclasses import dataclass
 
-from agf.utility import (read_fc,
-                         slice_top_right,
-                         slice_bottom_left,
-                         nonzero_submatrix,
-                         index_nonzero,
-                         fold_matrix,
-                         unfold_matrix,
-                         flatten_list)
+from agf.utility import slice_bottom_left, slice_top_right
+from agf.base import _HarmonicMatrices
 
 from agf.structure import Layer, StructureSystem
 
-
-@dataclass
-class TotalHarmonicMatrix:
-    """
-    Represents the sub-matrices of the total harmonic matrix
-    for a contact(1)-device(d)-contact(2) structure:
-
-                | H1    tau1†  0    |
-        H_tot = | tau1  Hd     tau2 |
-                | 0     tau2†  H2   |
-
-    If the harmonic sub-matrices have shapes:
-
-        H1 ~ c1 x c1
-        Hd ~ cd x cd
-        H2 ~ c2 x c2
-
-    then, the connection matrices have shapes:
-
-        tau1 ~ cd x c1
-        tau2 ~ cd x c2
-
-    """
-
-    _H1: np.ndarray
-    _tau1: np.ndarray
-    _Hd: np.ndarray
-    _tau2: np.ndarray
-    _H2: np.ndarray
-
-    @property
-    def H1(self):
-        """harmonic matrix of first contact; H_tot[0,0]"""
-        return self._H1
-
-    @property
-    def tau1(self):
-        """connection matrix between first contact and device; H_tot[1,0]"""
-        return self._tau1
-
-    @property
-    def Hd(self):
-        """harmonic matrix of device region; H_tot[1,1]"""
-        return self._Hd
-
-    @property
-    def tau2(self):
-        """connection matrix between second contact and device; H_tot[1,2]"""
-        return self._tau2
-
-    @property
-    def H2(self):
-        """harmonic matrix of second contact; H_tot[2,2]"""
-        return self._H2
-
-
-@dataclass(frozen=True)
-class AGFResult:
-    """Results of an AGF computation at some frequency `omega`"""
-    omega: float  # frequency
-    delta: float  # broadening
-    G: np.ndarray  # green's function matrix of the device
-    Gamma1: np.ndarray  # Zhang eq. (16)
-    Gamma2: np.ndarray
-    A1: np.ndarray  # Zhang eq. (15)
-    A2: np.ndarray
-
-    @property
-    def transmission(self) -> float:
-        """transmission function at omega"""
-        try:
-            trans = np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
-        except ValueError:
-            trans = np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
-        return float(trans)
-
-
-class AGF(TotalHarmonicMatrix):
-    """
-    Atomistic Green's Function method calculator.
-
-    See:
-        Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
-    """
-
-    @property
-    def force_constants(self) -> np.ndarray:
-        """array of all force constants between every pair of atoms [eV/Angstrom]"""
-        return self._force_constants
-
-    @property
-    def index_map(self) -> Dict[int, int]:
-        """a dictionary {atom_id: index in force_constants}"""
-        return self._index_map
-
-    @property
-    def structure(self) -> StructureSystem:
-        """a contact-device-contact structure outlining layers and constituent atoms"""
-        return self._struct
-
-    def __init__(self,
-                 struct: StructureSystem,
-                 force_constants: Union[str, np.ndarray],
-                 sort_force_constants: bool = True,
-                 n_dof: int = 3):
-        """
-        Initialize an AGF calculation.
-
-        :param struct: StructureSystem object containing layer/atom information
-        :param force_constants: a matrix of harmonic constants for the system
-        :param sort_force_constants: if True, sort force constants in structure order
-        :param n_dof: number of degrees of freedom
-        """
-        self._n_dof = n_dof
-        self._struct = struct
-        if type(force_constants) is str:
-            force_constants = read_fc(force_constants)
-
-        if sort_force_constants:
-            self._force_constants, self._index_map = self._sort_fcs(force_constants)
-        else:
-            self._force_constants = force_constants
-            self._index_map = {i + 1: i for i in range(force_constants.shape[0])}
-
-        self._set_harmonic_matrices()
-
-    def _sort_fcs(self, fcs: np.ndarray) -> Tuple[np.ndarray, Dict[int, int]]:
-        """sort force constants matrix to correspond to ordering in structure"""
-        rearrange = []
-        index_map = {}
-        layers_id_sequence = flatten_list(self.structure.section_ids)
-        for layers_index, id_ in enumerate(layers_id_sequence):
-            index = self.structure.locate_atom(id_).index
-            rearrange.append(index)
-            index_map[id_] = layers_index
-
-        # fold (reshape) force constants so outer elements are atom-wise matrices
-        fcs = fold_matrix(fcs, self._n_dof, self._n_dof)
-
-        # rearrange rows
-        rearrange = np.asarray(rearrange)
-        fcs = fcs[rearrange]
-
-        # rearrange columns
-        for j in range(fcs.shape[0]):
-            fcs[j, :] = fcs[j, :][rearrange]
-
-        # unfold into original shape
-        fcs = unfold_matrix(fcs)
-
-        return fcs, index_map
-
-    def _set_harmonic_matrices(self) -> None:
-        """assign harmonic and connection matrices according to AGF formulation"""
-        ids = self.structure.section_ids
-        d = self._n_dof
-        n1 = sum(len(layer_ids) for layer_ids in ids[0])
-        n2 = sum(len(layer_ids) for layer_ids in ids[1])
-        n3 = sum(len(layer_ids) for layer_ids in ids[2])
-
-        folded_fcs = fold_matrix(self._force_constants, d, d)
-
-        N = n1 + n2 + n3
-        if folded_fcs.shape[:2] != (N, N):
-            raise RuntimeError("force constants shape does not match structure")
-
-        # first contact
-        a11 = 0
-        b11 = n1
-        self._H1 = unfold_matrix(folded_fcs[a11:b11, a11:b11])
-
-        # first connection matrix (tau1)
-        a1d = n1
-        b1d = n1 + n2
-        c1d = 0
-        d1d = n1
-        self._tau1 = unfold_matrix(folded_fcs[a1d:b1d, c1d:d1d])
-
-        # device region
-        add = n1
-        bdd = n1 + n2
-        self._Hd = unfold_matrix(folded_fcs[add:bdd, add:bdd])
-
-        # second connection matrix (tau2)
-        ad2 = n1
-        bd2 = n1 + n2
-        cd2 = n1 + n2
-        dd2 = N
-        self._tau2 = unfold_matrix(folded_fcs[ad2:bd2, cd2:dd2])
-
-        # second contact
-        a22 = n1 + n2
-        b22 = N
-        self._H2 = unfold_matrix(folded_fcs[a22:b22, a22:b22])
-
-        # decimators for computing uncoupled contact Green's functions
-        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, d)
-        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, d)
-
-    def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
-        """
-        Set tolerance and maximum number of iterations for decimations
-
-        :param iter_tol: minimum value of change between iterations
-        :param max_iter: maximum number of iterations
-        """
-        if iter_tol is not None:
-            self._decimate_g1.iter_tol = iter_tol
-            self._decimate_g2.iter_tol = iter_tol
-        if max_iter is not None:
-            self._decimate_g1.max_iter = max_iter
-            self._decimate_g2.max_iter = max_iter
-
-    def compute(self, omega: float, delta: float) -> AGFResult:
-        """
-        Calculates uncoupled Greens functions using the decimation technique.
-
-        :param omega: frequency at which to compute
-        :param delta: broadening factor
-        """
-
-        # decimation for contact surface Green's functions
-        g1s = self._decimate_g1(omega, delta)
-        m1, n1 = g1s.shape
-        g2s = self._decimate_g2(omega, delta)
-        m2, n2 = g2s.shape
-
-        # TODO: can make smaller, some atoms in one layer don't interact with any in the next
-        # extract non-zero sub-matrices
-        t1 = slice_top_right(self._tau1, m1, n1)
-        t1_H = t1.conj().T
-        t2 = slice_bottom_left(self._tau2, m2, n2)
-        t2_H = t2.conj().T
-
-        # compute self-energy matrices
-        se1 = t1 @ g1s @ t1_H
-        se2 = t2 @ g2s @ t2_H
-
-        """final matrix inversion for Green's function"""
-        # compute the device Green's function
-        w2I = (omega**2 + 1j * delta) * np.eye(self._Hd.shape[0])
-        G = np.linalg.inv(w2I - self._Hd - se1 - se2)
-
-        # compute derived quantities
-        A1 = 1j * (g1s - g1s.conj().T)
-        A2 = 1j * (g2s - g2s.conj().T)
-        Gamma1 = t1 @ A1 @ t1_H
-        Gamma2 = t2 @ A2 @ t2_H
-
-        return AGFResult(omega, delta, G, Gamma1, Gamma2, A1, A2)
+__version__ = "18Aug2021"
 
 
 class Decimation:
@@ -314,21 +60,19 @@ class Decimation:
         self._inverse_order = False
 
         # set matrices Hs, tau1, tau2
-        self._set_matrices(surface_index)
-
-    def _set_matrices(self, surface_index: int) -> None:
-        """assign sub-matrices of harmonic constants"""
         N_layers = len(self._layers)
         surface_index %= N_layers
         if not (surface_index == 0 or surface_index == N_layers - 1):
             raise ValueError("surface index does not correspond to and edge layer.")
 
         if surface_index != 0:
+            # flip everything around for second contact
             self._harmonic_matrix = np.flip(self._harmonic_matrix)
             self._layers.reverse()
             self._inverse_order = True
 
-        self._H00 = self._get_H_submatrix(0, 0)
+        # assign starting values
+        self._Hs = self._get_H_submatrix(0, 0)
         self._t1 = self._get_H_submatrix(0, 1)
         self._t2 = self._get_H_submatrix(1, 0)
 
@@ -341,10 +85,9 @@ class Decimation:
     def _calculate_gs_at_omega(self, omega: float, delta: float) -> np.ndarray:
         """compute surface Green's function at given frequency with given broadening"""
         w2I = (omega**2 + 1j * delta) * np.eye(self._n_dof * self._ns[0])
-        H00 = self._H00
 
         # input values
-        Ws = Wb = w2I - H00  # symmetry assumed
+        Ws = Wb = w2I - self._Hs  # TODO: simplifying symmetry rules assumed
         t1 = -self._t1
         t2 = -self._t2
 
@@ -354,12 +97,13 @@ class Decimation:
         count = 0
         count_max = self._max_iter
         while Ws_change > Ws_change_min and count < count_max:
-            # Guinea eqs. 15
+            # this loop implements Guinea eqs. 15
             Gb = np.linalg.inv(Wb)
             Gb12 = t1 @ Gb @ t2
             Gb21 = t2 @ Gb @ t1
-
             Ws_prev = Ws
+
+            # update values
             Ws = Ws - Gb12
             Wb = Wb - Gb12 - Gb21
             t1 = -t1 @ Gb @ t1
@@ -367,6 +111,9 @@ class Decimation:
 
             Ws_change = np.linalg.norm(Ws - Ws_prev) / np.linalg.norm(Ws_prev)
             count += 1
+
+        if count > count_max:
+            warn(f"exceeded max number of iterations in decimation at freq. {omega}")
 
         G00 = np.linalg.inv(Ws)
         return G00
@@ -384,12 +131,102 @@ class Decimation:
         return self._harmonic_matrix[a: c, b: d]
 
 
+class AGF(_HarmonicMatrices):
+    """
+    Atomistic Green's Function method calculator.
+
+    See:
+        Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
+    """
+
+    def __init__(self,
+                 struct: StructureSystem,
+                 force_constants: Union[str, np.ndarray],
+                 sort_force_constants: bool = True,
+                 n_dof: int = 3):
+        super().__init__(struct, force_constants, sort_force_constants, n_dof)
+        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, self._n_dof)
+        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, self._n_dof)
+
+    def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
+        """
+        Set tolerance and maximum number of iterations for decimations
+
+        :param iter_tol: minimum value of change between iterations
+        :param max_iter: maximum number of iterations
+        """
+        if iter_tol is not None:
+            self._decimate_g1.iter_tol = iter_tol
+            self._decimate_g2.iter_tol = iter_tol
+        if max_iter is not None:
+            self._decimate_g1.max_iter = max_iter
+            self._decimate_g2.max_iter = max_iter
+
+    def compute(self, omega: float, delta: float) -> 'AGFResult':
+        """
+        Calculates uncoupled Greens functions using the decimation technique.
+
+        :param omega: frequency at which to compute
+        :param delta: broadening factor
+        """
+
+        # decimation for contact surface Green's functions
+        g1s = self._decimate_g1(omega, delta)
+        g2s = self._decimate_g2(omega, delta)
+        m1, n1 = g1s.shape
+        m2, n2 = g2s.shape
+
+        # TODO: can make smaller, some atoms in one layer don't interact with any in the next
+        # extract non-zero sub-matrices
+        t1 = slice_top_right(self._tau1, m1, n1)
+        t1_H = t1.conj().T
+        t2 = slice_bottom_left(self._tau2, m2, n2)
+        t2_H = t2.conj().T
+
+        # compute self-energy matrices
+        se1 = t1 @ g1s @ t1_H
+        se2 = t2 @ g2s @ t2_H
+
+        # compute the device Green's function
+        w2I = (omega**2 + 1j * delta) * np.eye(self._Hd.shape[0])
+        G = np.linalg.inv(w2I - self._Hd - se1 - se2)
+
+        # compute derived quantities
+        A1 = 1j * (g1s - g1s.conj().T)
+        A2 = 1j * (g2s - g2s.conj().T)
+        Gamma1 = t1 @ A1 @ t1_H
+        Gamma2 = t2 @ A2 @ t2_H
+
+        return AGFResult(omega, delta, G, Gamma1, Gamma2, A1, A2)
+
+
+@dataclass(frozen=True)
+class AGFResult:
+    """Results of an AGF computation at some frequency `omega`"""
+    omega: float  # frequency
+    delta: float  # broadening
+    G: np.ndarray  # green's function matrix of the device
+    Gamma1: np.ndarray  # Zhang eq. (16)
+    Gamma2: np.ndarray
+    A1: np.ndarray  # Zhang eq. (15)
+    A2: np.ndarray
+
+    @property
+    def transmission(self) -> float:
+        """transmission function at omega"""
+        try:
+            trans = np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
+        except ValueError:
+            trans = np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
+        return float(trans)
+
+
 def get_zhang_delta(omegas: Iterable[float],
                     c1: float = 1e-3,
                     c2: float = 0.0,
                     max_val: float = None) -> np.ndarray:
     """
-    Frequency broadening function, see:
+    A frequency broadening function, see:
 
         Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
         Eq. 39
@@ -398,6 +235,3 @@ def get_zhang_delta(omegas: Iterable[float],
         max_val = max(omegas)
     omegas = np.asarray(omegas)
     return c1 * ((1.0 + c2) - omegas / max_val) * omegas**2
-
-
-__version__ = "18Aug2021"
