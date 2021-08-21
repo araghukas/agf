@@ -119,9 +119,14 @@ class AGF(TotalHarmonicMatrix):
                  sort_force_constants: bool = True,
                  n_dof: int = 3):
         """
-        Sort force constants and prepare harmonic matrices.
-        """
+        Initialize an AGF calculation.
 
+        :param struct: StructureSystem object containing layer/atom information
+        :param force_constants: a matrix of harmonic constants for the system
+        :param sort_force_constants: if True, sort force constants in structure order
+        :param n_dof: number of degrees of freedom
+        """
+        self._n_dof = n_dof
         self._struct = struct
         if type(force_constants) is str:
             force_constants = read_fc(force_constants)
@@ -132,7 +137,7 @@ class AGF(TotalHarmonicMatrix):
             self._force_constants = force_constants
             self._index_map = {i + 1: i for i in range(force_constants.shape[0])}
 
-        self._set_harmonic_matrices(n_dof)
+        self._set_harmonic_matrices()
 
     def _sort_fcs(self, fcs: np.ndarray) -> Tuple[np.ndarray, Dict[int, int]]:
         """sort force constants matrix to correspond to ordering in structure"""
@@ -141,12 +146,11 @@ class AGF(TotalHarmonicMatrix):
         layers_id_sequence = flatten_list(self.structure.section_ids)
         for layers_index, id_ in enumerate(layers_id_sequence):
             index = self.structure.locate_atom(id_).index
-
             rearrange.append(index)
             index_map[id_] = layers_index
 
         # fold (reshape) force constants so outer elements are atom-wise matrices
-        fcs = fold_matrix(fcs, 3, 3)
+        fcs = fold_matrix(fcs, self._n_dof, self._n_dof)
 
         # rearrange rows
         rearrange = np.asarray(rearrange)
@@ -161,15 +165,15 @@ class AGF(TotalHarmonicMatrix):
 
         return fcs, index_map
 
-    def _set_harmonic_matrices(self, n_dof: int = 3) -> None:
+    def _set_harmonic_matrices(self) -> None:
         """assign harmonic and connection matrices according to AGF formulation"""
         ids = self.structure.section_ids
-
+        d = self._n_dof
         n1 = sum(len(layer_ids) for layer_ids in ids[0])
         n2 = sum(len(layer_ids) for layer_ids in ids[1])
         n3 = sum(len(layer_ids) for layer_ids in ids[2])
 
-        folded_fcs = fold_matrix(self._force_constants, n_dof, n_dof)
+        folded_fcs = fold_matrix(self._force_constants, d, d)
 
         N = n1 + n2 + n3
         if folded_fcs.shape[:2] != (N, N):
@@ -205,8 +209,8 @@ class AGF(TotalHarmonicMatrix):
         self._H2 = unfold_matrix(folded_fcs[a22:b22, a22:b22])
 
         # decimators for computing uncoupled contact Green's functions
-        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, n_dof)
-        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, n_dof)
+        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, d)
+        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, d)
 
     def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
         """
