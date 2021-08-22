@@ -52,17 +52,17 @@ class StructureSystem:
     @property
     def contact1(self) -> List[Layer]:
         """list of layers belonging to first contact"""
-        return [self._layers[layer_number] for layer_number in self._c1]
+        return self._contact1
 
     @property
     def device(self) -> List[Layer]:
         """list of layers belonging to device portion"""
-        return [self._layers[layer_number] for layer_number in self._dv]
+        return self._device
 
     @property
     def contact2(self) -> List[Layer]:
         """list of layers belonging to second contact"""
-        return [self._layers[layer_number] for layer_number in self._c2]
+        return self._contact1
 
     @property
     def section_ids(self) -> List[List[List[int]]]:
@@ -106,13 +106,16 @@ class StructureSystem:
         each of three regions.
         """
         # first contact: layers [0,b1]
-        self._c1 = [i for i in range(b1 + 1)]
+        c1 = [i for i in range(b1 + 1)]
+        self._contact1 = [self._layers[layer_number] for layer_number in c1]
 
         # device: layers (b1,b2]
-        self._dv = [i for i in range(b1 + 1, b2 + 1)]
+        dv = [i for i in range(b1 + 1, b2 + 1)]
+        self._device = [self._layers[layer_number] for layer_number in dv]
 
         # second contact (b2,N]
-        self._c2 = [i for i in range(b2 + 1, len(self.layers))]
+        c2 = [i for i in range(b2 + 1, len(self.layers))]
+        self._contact2 = [self._layers[layer_number] for layer_number in c2]
 
     def locate_atom(self, atom_id: int) -> Atom:
         """returns Atom object summarizing corresponding line in atoms data file"""
