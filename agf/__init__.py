@@ -225,7 +225,7 @@ class AGFResult:
             trans = np.trace(self.Gamma1 @ self.G @ self.Gamma2 @ self.G.conj().T)
         except ValueError:
             trans = np.trace(self.Gamma1 * self.G * self.Gamma2 * self.G.conj().T)
-        return float(trans)
+        return float(trans.real)
 
 
 def get_zhang_delta(omegas: Iterable[float],
