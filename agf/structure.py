@@ -65,6 +65,21 @@ class StructureSystem:
         return self._contact1
 
     @property
+    def n1(self) -> int:
+        """number of atoms in the first contact"""
+        return self._n1
+
+    @property
+    def nd(self) -> int:
+        """number of atoms in the device"""
+        return self._nd
+
+    @property
+    def n2(self) -> int:
+        """number of atoms in the second contact"""
+        return self._n2
+
+    @property
     def section_ids(self) -> List[List[List[int]]]:
         """list of ids in contact1, device, and contact2 regions"""
         return [
@@ -81,6 +96,26 @@ class StructureSystem:
                              % (b1, b2))
         self._assign_layers(b1, b2)
         self._data_map = data_map
+
+    def _assign_layers(self, b1: int, b2: int) -> None:
+        """
+        Based on the boundaries, create lists of layers representing
+        each of three regions.
+        """
+        # first contact: layers [0,b1]
+        c1 = [i for i in range(b1 + 1)]
+        self._contact1 = [self._layers[layer_number] for layer_number in c1]
+        self._n1 = sum(layer.N for layer in self._contact1)
+
+        # device: layers (b1,b2]
+        dv = [i for i in range(b1 + 1, b2 + 1)]
+        self._device = [self._layers[layer_number] for layer_number in dv]
+        self._nd = sum(layer.N for layer in self._device)
+
+        # second contact (b2,N]
+        c2 = [i for i in range(b2 + 1, len(self.layers))]
+        self._contact2 = [self._layers[layer_number] for layer_number in c2]
+        self._n2 = sum(layer.N for layer in self._contact2)
 
     @classmethod
     def from_files(cls, map_file_path: str, data_file_path: str,
@@ -99,23 +134,6 @@ class StructureSystem:
         layers = read_layer_map(map_file_path)
         data_map = read_data_file(data_file_path)
         return cls(layers, data_map, b1, b2)
-
-    def _assign_layers(self, b1: int, b2: int) -> None:
-        """
-        Based on the boundaries, create lists of layers representing
-        each of three regions.
-        """
-        # first contact: layers [0,b1]
-        c1 = [i for i in range(b1 + 1)]
-        self._contact1 = [self._layers[layer_number] for layer_number in c1]
-
-        # device: layers (b1,b2]
-        dv = [i for i in range(b1 + 1, b2 + 1)]
-        self._device = [self._layers[layer_number] for layer_number in dv]
-
-        # second contact (b2,N]
-        c2 = [i for i in range(b2 + 1, len(self.layers))]
-        self._contact2 = [self._layers[layer_number] for layer_number in c2]
 
     def locate_atom(self, atom_id: int) -> Atom:
         """returns Atom object summarizing corresponding line in atoms data file"""
