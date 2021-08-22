@@ -120,7 +120,7 @@ def slice_bottom_left(arr: np.ndarray, m: int, n: int) -> np.ndarray:
     return arr[-n:, :m]
 
 
-def get_block(arr: np.ndarray, k: int, i: int, j: int) -> tuple:
+def get_block_and_index(arr: np.ndarray, k: int, i: int, j: int) -> tuple:
     """return the k x k block at block index [i,j] and its slice indices"""
     M, N = arr.shape
     idx = np.array([i * k, (i + 1) * k, j * k, (j + 1) * k])

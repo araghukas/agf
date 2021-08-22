@@ -1,6 +1,6 @@
 """Implements the decimation technique for re-normalizing (ωI - H) matrices"""
 import numpy as np
-from agf.utility import get_block
+from agf.utility import get_block_and_index
 
 
 def decimate(arr: np.ndarray,
@@ -52,12 +52,12 @@ def _decimate_once(arr: np.ndarray, k: int, m: int) -> np.ndarray:
 
     # upper left edge (i = 0)
     # -----------------------
-    W_00, iW = get_block(arr, k, 0, 0)
-    t_0_0p, i1 = get_block(arr, k, 0, 1)
+    W_00, iW = get_block_and_index(arr, k, 0, 0)
+    t_0_0p, i1 = get_block_and_index(arr, k, 0, 1)
 
-    t_0p_0 = get_block(arr, k, 1, 0)[0]
-    t_0p_0pp = get_block(arr, k, 1, 2)[0]
-    W_0p_0p = get_block(arr, k, 1, 1)[0]
+    t_0p_0 = get_block_and_index(arr, k, 1, 0)[0]
+    t_0p_0pp = get_block_and_index(arr, k, 1, 2)[0]
+    W_0p_0p = get_block_and_index(arr, k, 1, 1)[0]
 
     g_11 = np.linalg.inv(W_0p_0p)
     arr[iW[0]:iW[1], iW[2]:iW[3]] = W_00 - t_0_0p @ g_11 @ t_0p_0  # new W_00
@@ -71,16 +71,16 @@ def _decimate_once(arr: np.ndarray, k: int, m: int) -> np.ndarray:
         # ip -> i+1
         # imm -> i-2
         # ipp -> i+2
-        W_ii, iW = get_block(arr, k, i, i)
-        t_i_im, i0 = get_block(arr, k, i, i - 1)
-        t_i_ip, i1 = get_block(arr, k, i, i + 1)
+        W_ii, iW = get_block_and_index(arr, k, i, i)
+        t_i_im, i0 = get_block_and_index(arr, k, i, i - 1)
+        t_i_ip, i1 = get_block_and_index(arr, k, i, i + 1)
 
-        W_im_im = get_block(arr, k, i - 1, i - 1)[0]
-        W_ip_ip = get_block(arr, k, i + 1, i + 1)[0]
-        t_im_i = get_block(arr, k, i - 1, i)[0]
-        t_ip_i = get_block(arr, k, i + 1, i)[0]
-        t_im_imm = get_block(arr, k, i - 1, i - 2)[0]
-        t_ip_ipp = get_block(arr, k, i + 1, i + 2)[0]
+        W_im_im = get_block_and_index(arr, k, i - 1, i - 1)[0]
+        W_ip_ip = get_block_and_index(arr, k, i + 1, i + 1)[0]
+        t_im_i = get_block_and_index(arr, k, i - 1, i)[0]
+        t_ip_i = get_block_and_index(arr, k, i + 1, i)[0]
+        t_im_imm = get_block_and_index(arr, k, i - 1, i - 2)[0]
+        t_ip_ipp = get_block_and_index(arr, k, i + 1, i + 2)[0]
 
         g_im_im = np.linalg.inv(W_im_im)
         g_ip_ip = np.linalg.inv(W_ip_ip)
@@ -93,12 +93,12 @@ def _decimate_once(arr: np.ndarray, k: int, m: int) -> np.ndarray:
     # lower right edge (i = m - 1 = f)
     # --------------------------------
     f = m - 1
-    W_ff, iW = get_block(arr, k, f, f)
-    t_f_fm, i0 = get_block(arr, k, f, f - 1)
+    W_ff, iW = get_block_and_index(arr, k, f, f)
+    t_f_fm, i0 = get_block_and_index(arr, k, f, f - 1)
 
-    W_fm_fm = get_block(arr, k, f - 1, f - 1)[0]
-    t_fm_f = get_block(arr, k, f - 1, f)[0]
-    t_fm_fmm = get_block(arr, k, f - 1, f - 2)[0]
+    W_fm_fm = get_block_and_index(arr, k, f - 1, f - 1)[0]
+    t_fm_f = get_block_and_index(arr, k, f - 1, f)[0]
+    t_fm_fmm = get_block_and_index(arr, k, f - 1, f - 2)[0]
 
     g_fm_fm = np.linalg.inv(W_fm_fm)
     arr[iW[0]:iW[1], iW[2]:iW[3]] = W_ff - t_f_fm @ g_fm_fm @ t_fm_f

@@ -2,7 +2,7 @@ import numpy as np
 from typing import Iterable, Union
 from dataclasses import dataclass
 
-from agf.utility import slice_bottom_left, slice_top_right, get_block
+from agf.utility import slice_bottom_left, slice_top_right, get_block_and_index
 from agf.base import _HarmonicMatrices
 from agf.decimate import decimate
 
@@ -65,8 +65,9 @@ class AGF(_HarmonicMatrices):
         w2I2 = (omega**2 + 1j * delta) * np.eye(self._struct.n2)
         W1 = decimate(w2I1 - self._H1, self._n_dof, self._iter_tol, self._max_iter, flip=True)
         W2 = decimate(w2I2 - self._H2, self._n_dof, self._iter_tol, self._max_iter)
-        g1s = np.linalg.inv(get_block(W1, ns1, 0, 0)[0])
-        g2s = np.linalg.inv(get_block(W2, ns2, 0, 0)[0])
+        print(W2)
+        g1s = np.linalg.inv(get_block_and_index(W1, ns1, 0, 0)[0])
+        g2s = np.linalg.inv(get_block_and_index(W2, ns2, 0, 0)[0])
 
         # TODO: can make smaller, some atoms in one layer don't interact with any in the next
         # extract non-zero sub-matrices
