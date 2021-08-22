@@ -7,7 +7,8 @@ def decimate(arr: np.ndarray,
              k: int,
              max_tol: float = 1e-8,
              max_iter: int = 100,
-             in_place: bool = False) -> np.ndarray:
+             in_place: bool = False,
+             flip: bool = False) -> np.ndarray:
     """
     Implements Guinea et al. decimation technique for surface Green's function.
     Note: the input array is decimated IN PLACE.
@@ -17,10 +18,13 @@ def decimate(arr: np.ndarray,
     :param max_tol: convergence tolerance, smaller -> more work
     :param max_iter: maximum number of iterations
     :param in_place: if False, decimation is done on a copy of the input array
+    :param flip: flip input array, compute, and flip back before returning
     :return: the array after a convergent decimation
     """
     if not in_place:
         arr = arr.copy()
+    if flip:
+        arr = np.flip(arr)
 
     M, N = arr.shape
     if M != N:
@@ -38,6 +42,8 @@ def decimate(arr: np.ndarray,
         i += 1
         old_arr = arr.copy()
 
+    if flip:
+        return np.flip(arr)
     return arr
 
 
