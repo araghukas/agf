@@ -63,7 +63,7 @@ class AGF(_HarmonicMatrices):
         ns2 = self._struct.contact2[0].N
         w2I1 = (omega**2 + 1j * delta) * np.eye(self._struct.n1)
         w2I2 = (omega**2 + 1j * delta) * np.eye(self._struct.n2)
-        W1 = decimate(w2I1 - self._H1, self._n_dof, self._iter_tol, self._max_iter)
+        W1 = decimate(w2I1 - self._H1, self._n_dof, self._iter_tol, self._max_iter, flip=True)
         W2 = decimate(w2I2 - self._H2, self._n_dof, self._iter_tol, self._max_iter)
         g1s = np.linalg.inv(get_block(W1, ns1, 0, 0)[0])
         g2s = np.linalg.inv(get_block(W2, ns2, 0, 0)[0])
@@ -82,9 +82,9 @@ class AGF(_HarmonicMatrices):
         # pad the self energy matrices if necessary
         nd = self._struct.nd
         if ns1 != nd or ns1 != nd:
-            se1 = np.pad(t1 @ g1s @ t1_H, ((0, nd - ns1), (0, nd - ns1)), constant_values=0.j)
+            se1 = np.pad(se1, ((0, nd - ns1), (0, nd - ns1)), constant_values=0.j)
         if ns2 != nd or ns2 != nd:
-            se2 = np.pad(t2 @ g2s @ t2_H, ((nd - ns2, 0), (nd - ns2, 0)), constant_values=0.j)
+            se2 = np.pad(se2, ((nd - ns2, 0), (nd - ns2, 0)), constant_values=0.j)
 
         # compute the device Green's function
         w2Id = (omega**2 + 1j * delta) * np.eye(nd)
