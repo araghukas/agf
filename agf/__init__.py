@@ -1,23 +1,22 @@
 import numpy as np
-from warnings import warn
-from typing import List, Iterable, Union
+from typing import Iterable, Union
 from dataclasses import dataclass
 
-from agf.utility import slice_bottom_left, slice_top_right
+from agf.utility import slice_bottom_left, slice_top_right, get_block
 from agf.base import _HarmonicMatrices
+from agf.decimate import decimate
 
 from agf.structure import Layer, StructureSystem
 
 __version__ = "18Aug2021"
 
 
-class Decimation:
+class AGF(_HarmonicMatrices):
     """
-    Calculates surface and bulk Green's functions given a sorted harmonic matrix,
-    see:
+    Atomistic Green's Function method calculator.
 
-        Guinea, F., et al. Physical Review B, vol. 28, no. 8, Oct. 1983, pp. 4397–402.
-        Sancho et al. Journal of Physics F: Metal Physics, vol. 15, no. 4, Apr. 1985, pp. 851–58.
+    See:
+        Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
     """
 
     @property
@@ -41,126 +40,15 @@ class Decimation:
         self._iter_tol = t
 
     def __init__(self,
-                 harmonic_matrix: np.ndarray,
-                 layers: List[Layer],
-                 surface_index: int,
-                 n_dof: int = 3):
-
-        self._harmonic_matrix = harmonic_matrix
-        self._layers = layers
-        self._ns = [len(layer.ids) for layer in self._layers]
-        if n_dof > 0:
-            self._n_dof = n_dof
-        else:
-            raise ValueError("number of degrees of freedom must be a positive integer.")
-
-        # property defaults
-        self._iter_tol = np.finfo(float).eps
-        self._max_iter = 100
-        self._inverse_order = False
-
-        # set matrices Hs, tau1, tau2
-        N_layers = len(self._layers)
-        surface_index %= N_layers
-        if not (surface_index == 0 or surface_index == N_layers - 1):
-            raise ValueError("surface index does not correspond to and edge layer.")
-
-        if surface_index != 0:
-            # flip everything around for second contact
-            self._harmonic_matrix = np.flip(self._harmonic_matrix)
-            self._layers.reverse()
-            self._inverse_order = True
-
-        # assign starting values
-        self._Hs = self._get_H_submatrix(0, 0)
-        self._t1 = self._get_H_submatrix(0, 1)
-        self._t2 = self._get_H_submatrix(1, 0)
-
-    def __call__(self, omega: float, delta: float) -> np.ndarray:
-        gs = self._calculate_gs_at_omega(omega, delta)
-        if self._inverse_order:
-            return np.flip(gs)
-        return gs
-
-    def _calculate_gs_at_omega(self, omega: float, delta: float) -> np.ndarray:
-        """compute surface Green's function at given frequency with given broadening"""
-        w2I = (omega**2 + 1j * delta) * np.eye(self._n_dof * self._ns[0])
-
-        # input values
-        Ws = Wb = w2I - self._Hs  # TODO: simplifying symmetry rules assumed
-        t1 = -self._t1
-        t2 = -self._t2
-
-        # termination/convergence conditions
-        Ws_change = np.inf
-        Ws_change_min = self._iter_tol
-        count = 0
-        count_max = self._max_iter
-        while Ws_change > Ws_change_min and count < count_max:
-            # this loop implements Guinea eqs. 15
-            Gb = np.linalg.inv(Wb)
-            Gb12 = t1 @ Gb @ t2
-            Gb21 = t2 @ Gb @ t1
-            Ws_prev = Ws
-
-            # update values
-            Ws = Ws - Gb12
-            Wb = Wb - Gb12 - Gb21
-            t1 = -t1 @ Gb @ t1
-            t2 = -t2 @ Gb @ t2
-
-            Ws_change = np.linalg.norm(Ws - Ws_prev) / np.linalg.norm(Ws_prev)
-            count += 1
-
-        if count > count_max:
-            warn(f"exceeded max number of iterations in decimation at freq. {omega}")
-
-        G00 = np.linalg.inv(Ws)
-        return G00
-
-    def _get_H_submatrix(self, i: int, j: int) -> np.ndarray:
-        """get the harmonic matrix between layers i, j"""
-        a = sum(self._ns[:i])
-        b = sum(self._ns[:j])
-        c = a + self._ns[i]
-        d = b + self._ns[j]
-        a *= self._n_dof
-        b *= self._n_dof
-        c *= self._n_dof
-        d *= self._n_dof
-        return self._harmonic_matrix[a: c, b: d]
-
-
-class AGF(_HarmonicMatrices):
-    """
-    Atomistic Green's Function method calculator.
-
-    See:
-        Zhang et al. Numerical Heat Transfer, Part B: Fundamentals 51.4 (2007): 333-349.
-    """
-
-    def __init__(self,
                  struct: StructureSystem,
                  force_constants: Union[str, np.ndarray],
                  sort_force_constants: bool = True,
                  n_dof: int = 3):
         super().__init__(struct, force_constants, sort_force_constants, n_dof)
-        self._decimate_g1 = Decimation(self._H1, self.structure.contact1, 0, self._n_dof)
-        self._decimate_g2 = Decimation(self._H2, self.structure.contact2, -1, self._n_dof)
 
-    def set_iteration_limits(self, iter_tol: float = None, max_iter: int = None) -> None:
-        """
-        Set tolerance and maximum number of iterations for decimations
-
-        :param iter_tol: minimum value of change between iterations
-        :param max_iter: maximum number of iterations
-        """
-        if iter_tol is not None:
-            self._decimate_g1.iter_tol = iter_tol
-            self._decimate_g2.iter_tol = iter_tol
-        if max_iter is not None:
-            self._decimate_g1.max_iter = max_iter
-            self._decimate_g2.max_iter = max_iter
+        # property defaults
+        self._iter_tol = 1e-8
+        self._max_iter = 100
 
     def compute(self, omega: float, delta: float) -> 'AGFResult':
         """
@@ -171,17 +59,20 @@ class AGF(_HarmonicMatrices):
         """
 
         # decimation for contact surface Green's functions
-        g1s = self._decimate_g1(omega, delta)
-        g2s = self._decimate_g2(omega, delta)
-        m1, n1 = g1s.shape
-        m2, n2 = g2s.shape
-        md = self._Hd.shape[0]
+        ns1 = self._struct.contact1[-1].N
+        ns2 = self._struct.contact2[0].N
+        w2I1 = (omega**2 + 1j * delta) * np.eye(self._struct.n1)
+        w2I2 = (omega**2 + 1j * delta) * np.eye(self._struct.n2)
+        W1 = decimate(w2I1 - self._H1, self._n_dof, self._iter_tol, self._max_iter)
+        W2 = decimate(w2I2 - self._H2, self._n_dof, self._iter_tol, self._max_iter)
+        g1s = np.linalg.inv(get_block(W1, ns1, 0, 0)[0])
+        g2s = np.linalg.inv(get_block(W2, ns2, 0, 0)[0])
 
         # TODO: can make smaller, some atoms in one layer don't interact with any in the next
         # extract non-zero sub-matrices
-        t1 = slice_top_right(self._tau1, m1, n1)
+        t1 = slice_top_right(self._tau1, ns1, ns1)
         t1_H = t1.conj().T
-        t2 = slice_bottom_left(self._tau2, m2, n2)
+        t2 = slice_bottom_left(self._tau2, ns2, ns2)
         t2_H = t2.conj().T
 
         # compute self-energy matrices
@@ -189,14 +80,15 @@ class AGF(_HarmonicMatrices):
         se2 = t2 @ g2s @ t2_H
 
         # pad the self energy matrices if necessary
-        if m1 != md or n1 != md:
-            se1 = np.pad(t1 @ g1s @ t1_H, ((0, md - m1), (0, md - n1)), constant_values=0.j)
-        if m2 != md or n2 != md:
-            se2 = np.pad(t2 @ g2s @ t2_H, ((md - m2, 0), (md - n2, 0)), constant_values=0.j)
+        nd = self._struct.nd
+        if ns1 != nd or ns1 != nd:
+            se1 = np.pad(t1 @ g1s @ t1_H, ((0, nd - ns1), (0, nd - ns1)), constant_values=0.j)
+        if ns2 != nd or ns2 != nd:
+            se2 = np.pad(t2 @ g2s @ t2_H, ((nd - ns2, 0), (nd - ns2, 0)), constant_values=0.j)
 
         # compute the device Green's function
-        w2I = (omega**2 + 1j * delta) * np.eye(md)
-        G = np.linalg.inv(w2I - self._Hd - se1 - se2)
+        w2Id = (omega**2 + 1j * delta) * np.eye(nd)
+        G = np.linalg.inv(w2Id - self._Hd - se1 - se2)
 
         # compute derived quantities
         A1 = 1j * (g1s - g1s.conj().T)
