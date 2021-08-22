@@ -62,7 +62,7 @@ class StructureSystem:
     @property
     def contact2(self) -> List[Layer]:
         """list of layers belonging to second contact"""
-        return self._contact1
+        return self._contact2
 
     @property
     def n1(self) -> int:
