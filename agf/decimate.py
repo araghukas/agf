@@ -89,7 +89,6 @@ def _decimate_once(arr: np.ndarray, k: int, m: int) -> np.ndarray:
         )
         arr[i0[0]:i0[1], i0[2]:i0[3]] = -t_i_im @ g_im_im @ t_im_imm
         arr[i1[0]:i1[1], i1[2]:i1[3]] = -t_i_ip @ g_ip_ip @ t_ip_ipp
-        print(arr)
 
     # lower right edge (i = m - 1 = f)
     # --------------------------------
