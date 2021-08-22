@@ -118,3 +118,13 @@ def slice_top_right(arr: np.ndarray, m: int, n: int) -> np.ndarray:
 def slice_bottom_left(arr: np.ndarray, m: int, n: int) -> np.ndarray:
     """return the bottom left shape (m,n) matrix inside arr"""
     return arr[-n:, :m]
+
+
+def get_block(arr: np.ndarray, k: int, i: int, j: int) -> tuple:
+    """return the k x k block at block index [i,j] and its slice indices"""
+    M, N = arr.shape
+    idx = np.array([i * k, (i + 1) * k, j * k, (j + 1) * k])
+    block = arr[idx[0]:idx[1], idx[2]:idx[3]]
+    if np.any(idx < 0) or np.any(idx > M) or np.any(idx > N):
+        block = np.zeros((k, k))
+    return np.ascontiguousarray(block), idx

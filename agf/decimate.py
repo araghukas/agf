@@ -1,5 +1,6 @@
 """Implements the decimation technique for re-normalizing (ωI - H) matrices"""
 import numpy as np
+from agf.utility import get_block
 
 
 def decimate(arr: np.ndarray,
@@ -95,13 +96,3 @@ def _decimate_once(arr: np.ndarray, k: int, m: int) -> np.ndarray:
         arr[i1[0]:i1[1], i1[2]:i1[3]] = -t_i_ip @ g_ip_ip @ t_ip_ipp  # new t_ip_i
 
     return arr
-
-
-def get_block(arr: np.ndarray, k: int, i: int, j: int) -> tuple:
-    """return the k x k block at block index [i,j] and its slice indices"""
-    M, N = arr.shape
-    idx = np.array([i * k, (i + 1) * k, j * k, (j + 1) * k])
-    block = arr[idx[0]:idx[1], idx[2]:idx[3]]
-    if np.any(idx < 0) or np.any(idx > M) or np.any(idx > N):
-        block = np.zeros((k, k))
-    return np.ascontiguousarray(block), idx
