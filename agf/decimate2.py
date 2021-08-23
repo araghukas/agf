@@ -9,18 +9,6 @@ class _BlockMatrix:
     """wraps a 2D array and provides easy access to blocks"""
 
     @property
-    def Ws(self):
-        return np.ascontiguousarray(self._Ws)
-
-    @property
-    def t_sb(self):
-        return np.ascontiguousarray(self._t_sb)
-
-    @property
-    def t_bs(self):
-        return np.ascontiguousarray(self._t_bs)
-
-    @property
     def k(self) -> int:
         """block matrix size"""
         return self._k
@@ -28,28 +16,27 @@ class _BlockMatrix:
     @k.setter
     def k(self, _k):
         self._k = _k
-        self._assign_matrices(_k)
+        self._update_dimensions(_k)
 
-    def _assign_matrices(self, _k: int) -> None:
-        # assign principal matrices
-        a, b, c, d = _BlockMatrix._as_slice_numbers(0, 1, _k)
-        self._t_sb = self.arr[a:b, c:d]
+    def _update_dimensions(self, _k: int) -> None:
+        # check `_k` against the array shape
+        M = self.arr.shape[0]
+        if M % _k != 0:
+            raise ValueError(f"can not divide {M}x{M} array into {_k}x{_k} blocks.")
 
-        a, b, c, d = _BlockMatrix._as_slice_numbers(1, 0, _k)
-        self._t_bs = self.arr[a:b, c:d]
+        self._Np = self.N // _k  # side length (in blocks) of complete block matrix
+        self._Nc = self._Np - 1  # side length (in blocks) of non-surface block matrix
 
-        a, b, c, d = _BlockMatrix._as_slice_numbers(0, 0, _k)
-        self._Ws = self.arr[a:b, c:d]  # the surface array
-        self._Wc = self.arr.copy()  # the image array
+    def __init__(self, arr: np.ndarray, k: int):
+        if arr.ndim != 2:
+            raise ValueError(f"input array has {arr.ndim}-dimensional, not 2.")
+        if arr.shape[0] != arr.shape[1]:
+            raise ValueError(f"input array shape {arr.shape[0]}x{arr.shape[1]} is not square.")
 
-        self._Np = self.N // _k  # number of principal blocks
-        self._Nc = self._Np - 1  # number of image cache blocks
-
-    def __init__(self, arr: np.ndarray, k: int, s: int):
         self.arr = arr
+        self.arr_prev = self.arr.copy()  # the previous surface array
         self.N = len(arr)
         self.k = k
-        self.s = s
 
     def get_block(self, i: int, j: int) -> np.ndarray:
         """
@@ -69,15 +56,38 @@ class _BlockMatrix:
         """
 
         if (0 <= i * self._k < self.N) and (0 <= j * self._k < self.N):
-            # return a principal block
             a, b, c, d = self._as_principal_slice(i, j)
-            print("principal: ", a, b, c, d)
-            return np.ascontiguousarray(self.arr[a:b, c:d])
+        else:
+            a, b, c, d = self._remap_block_index(i, j)
+        return np.ascontiguousarray(self.arr[a:b, c:d])
 
-        # return a 'fictitious' block
-        a, b, c, d = self._remap_block_index(i, j)
-        print("chached: ", a, b, c, d)
-        return np.ascontiguousarray(self._Wc[a:b, c:d])
+    def set_block(self, i: int, j: int, new_block: np.ndarray) -> None:
+        """assign new values to block[i][j]"""
+        a, b, c, d = self._get_slice_numbers(i, j)
+        self.arr[a:b, c:d] = new_block
+
+    def get_previous_block(self, i: int, j: int) -> np.ndarray:
+        """
+        Same as `get_block`, but a block from the previous matrix is returned
+        """
+        a, b, c, d = self._get_slice_numbers(i, j)
+        return np.ascontiguousarray(self.arr_prev[a:b, c:d])
+
+    def set_previous_block(self, i: int, j: int, new_block: np.ndarray) -> None:
+        """
+        Same as `set_block`, but for a block from the previous matrix
+        """
+        a, b, c, d = self._get_slice_numbers(i, j)
+        self.arr_prev[a:b, c:d] = new_block
+
+    def _get_slice_numbers(self, i: int, j: int) -> np.ndarray:
+        """
+        Returns array of 4 integers a,b,c,d for accessing
+        block_ij = arr[a:b, c:d]
+        """
+        if (0 <= i * self._k < self.N) and (0 <= j * self._k < self.N):
+            return self._as_principal_slice(i, j)
+        return self._remap_block_index(i, j)
 
     def _as_principal_slice(self, i: int, j: int) -> np.ndarray:
         """returns slice index for principal `arr`"""
@@ -92,20 +102,25 @@ class _BlockMatrix:
         self._validate_index(idx)
         return idx
 
-    def _reduce_diagonal(self, i: int, j: int) -> Tuple[int, int]:
-        """determine root element of periodic image"""
-        _i = i
-        _j = j
-        while _i >= self._Np or _j >= self._Np:
-            _i -= self._Nc
-            _j = _i - (i - j)
-        return _i, _j
+    def _reduce_diagonal(self, _i: int, _j: int) -> Tuple[int, int]:
+        """
+        Determine root element of periodic image.
+        Result will be nonsensical, unless |i - j| == 1 or 0
+        """
+        delta = _i - _j
+        if delta >= 0:
+            i = (_i - self._Np) % self._Nc + 1
+            j = i - delta
+        else:
+            j = (_j - self._Np) % self._Nc + 1
+            i = j + delta
+        return i, j
 
     def _validate_index(self, idx: np.ndarray) -> None:
         """to avoid getting empty slices"""
-        if any(i < 0 for i in idx) or any(i > self.N for i in idx):
+        if np.any(idx < 0) or np.any(idx > self.N):
             raise IndexError(f"slice [{idx[0]}:{idx[1]},{idx[2]}:{idx[3]}] is outside "
-                             f"the {self.N}x{self.N} array.")
+                             f"the {self.N}x{self.N} principal array.")
 
     @staticmethod
     def _as_slice_numbers(i: int, j: int, k: int) -> np.ndarray:
@@ -147,6 +162,7 @@ def decimate(arr: np.ndarray,
     else:
         _decimate = _decimate_once_finite
 
+    # TODO: these checks are no longer necessary -> instantiate _BlockMatrix
     M, N = arr.shape
     if M != N:
         raise ValueError(f"input array shape {M}x{N} is not square.")
