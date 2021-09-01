@@ -56,7 +56,7 @@ def flatten_list(nested_list: List[list]) -> list:
     return flat_list
 
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True)
 def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     """fold a shape (M,N) matrix to shape (m,n,p,q) where m=M/p and n=N/q"""
     M, N = arr.shape
@@ -73,7 +73,7 @@ def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     return new_arr
 
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True, cache=True)
 def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     """unfold a shape (m,n,p,q) matrix to shape (M,N) where M=p*m and N=q*n"""
     m, n, p, q = arr.shape
@@ -120,11 +120,14 @@ def slice_bottom_left(arr: np.ndarray, m: int, n: int) -> np.ndarray:
     return arr[-n:, :m]
 
 
-def get_block_and_index(arr: np.ndarray, k: int, i: int, j: int) -> tuple:
+def get_block_and_index(arr: np.ndarray, k: int, i: int, j: int, safe=False) -> tuple:
     """return the k x k block at block index [i,j] and its slice indices"""
     M, N = arr.shape
     idx = np.array([i * k, (i + 1) * k, j * k, (j + 1) * k])
     block = arr[idx[0]:idx[1], idx[2]:idx[3]]
     if np.any(idx < 0) or np.any(idx > M) or np.any(idx > N):
+        if safe:
+            raise IndexError(f"slice [{idx[0]}:{idx[1]},{idx[2]}:{idx[3]}] is outside "
+                             f"the {M}x{N} array.")
         block = np.zeros((k, k))
     return np.ascontiguousarray(block), idx

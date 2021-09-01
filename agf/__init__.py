@@ -63,8 +63,8 @@ class AGF(_HarmonicMatrices):
         ns2 = self._struct.contact2[0].N
         w2I1 = (omega**2 + 1j * delta) * np.eye(self._struct.n1)
         w2I2 = (omega**2 + 1j * delta) * np.eye(self._struct.n2)
-        W1 = decimate(w2I1 - self._H1, self._n_dof, self._iter_tol, self._max_iter, flip=True)
-        W2 = decimate(w2I2 - self._H2, self._n_dof, self._iter_tol, self._max_iter)
+        W1 = decimate(w2I1 - self._H1, self._n_dof)
+        W2 = decimate(w2I2 - self._H2, self._n_dof)
         print(W2)
         g1s = np.linalg.inv(get_block_and_index(W1, ns1, 0, 0)[0])
         g2s = np.linalg.inv(get_block_and_index(W2, ns2, 0, 0)[0])
