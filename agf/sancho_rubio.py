@@ -24,7 +24,7 @@ def decimate(arr: np.ndarray,
     :param arr: assumed to be (Ιω**2 - H) in the eq. (Ιω**2 - H)G = I.
     :param omega: angular frequency
     :param delta: frequency broadening
-    :param d: the block/layer size.
+    :param d: the block size (number of degrees of freedom).
     :param abs_tol: convergence tolerance for norm of connection matrix (default 1e-6)
     :param homogeneous: assume the matrix has repeating elements (i.e. layers).
     :return: the effective surface and bulk matrices (Iw**2 - H)
