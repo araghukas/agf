@@ -35,7 +35,7 @@ def _decimate(_arr: np.ndarray, N: int) -> np.ndarray:
         _arr[k][k] -= (_arr[k][k - 1] @ g_lo @ _arr[lo][lo + 1]
                        + _arr[k][k + 1] @ g_hi @ _arr[lo][lo - 1])
         _arr[k][k - 1] = -_arr[k][k - 1] @ _arr[lo][lo] @ _arr[lo][lo - 1]
-        _arr[k][k + 1] = -_arr[k][k + 1] @ _arr[hi][hi] @ _arr[hi][hi - 1]
+        _arr[k][k + 1] = -_arr[k][k + 1] @ _arr[hi][hi] @ _arr[hi][hi + 1]
 
         # now have top <-> after
         # after becomes new center
