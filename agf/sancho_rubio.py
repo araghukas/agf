@@ -42,8 +42,6 @@ def decimate(arr: np.ndarray,
     :param flip: flip the matrix before decimation
     :return: the effective surface and bulk matrices (Iw**2 - H)
     """
-    if flip:
-        arr = np.flip(arr)
     if not arr.ndim == 2:
         raise ValueError("input array is not 2-dimensional")
 
@@ -57,9 +55,9 @@ def decimate(arr: np.ndarray,
 
     if homogeneous:
         w2I = (omega**2 + 1.j * delta) * np.eye(d)
-        a = arr[0][1]
+        a = arr[-1][-2] if flip else arr[0][1]
         b = a.conj().T
-        eps = arr[0][0]
+        eps = arr[-1][-1] if flip else arr[0][0]
         Ws, Wb, a, b = _homogeneous_decimation(w2I, a, b, eps, abs_tol)
     else:
         raise NotImplementedError(

@@ -5,20 +5,15 @@ from typing import List, Dict
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass
 class Atom:
     """an atom of some type at some position in 3D space"""
     index: int
     typ: int
-    position: np.ndarray
-
-    def __post_init__(self):
-        if self.position.ndim != 1 or len(self.position) != 3:
-            raise ValueError("position {} is not a 3-vector"
-                             .format(self.position))
+    position: np.ndarray = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class Layer:
     """
     An ordered group of atoms organized by ID and type.
@@ -26,7 +21,7 @@ class Layer:
     """
     number: int
     ids: List[int]
-    types: List[int]
+    types: List[int] = None
 
     @property
     def N(self) -> int:
@@ -34,8 +29,12 @@ class Layer:
         return len(self.ids)
 
     def __post_init__(self):
-        if len(self.ids) != len(self.types):
+        if self.types is not None and len(self.ids) != len(self.types):
             raise ValueError("lengths of ids and types lists are not equal")
+
+
+class StructureError(Exception):
+    """labelled error for structure-specific errors"""
 
 
 class StructureSystem:
@@ -88,8 +87,7 @@ class StructureSystem:
             [layer.ids for layer in self.contact2]
         ]
 
-    def __init__(self, layers: List[Layer], data_map: Dict[int, Atom],
-                 b1: int, b2: int):
+    def __init__(self, layers: List[Layer], b1: int, b2: int, data_map: Dict[int, Atom] = None):
         self._layers = layers
         if not (0 < b1 < b2 < len(self.layers)):
             raise ValueError("invalid boundary layer indices b1 = %d, b2 = %d"
@@ -118,8 +116,8 @@ class StructureSystem:
         self._n2 = sum(layer.N for layer in self._contact2)
 
     @classmethod
-    def from_files(cls, map_file_path: str, data_file_path: str,
-                   b1: int, b2: int):
+    def from_files(cls, map_file_path: str,
+                   b1: int, b2: int, data_file_path: str = None):
         """
         Initialize a CDC structure using a layer map file and two boundaries
         to divide the layers into a contact-device-contact structure.
@@ -132,11 +130,13 @@ class StructureSystem:
         """
 
         layers = read_layer_map(map_file_path)
-        data_map = read_data_file(data_file_path)
-        return cls(layers, data_map, b1, b2)
+        data_map = read_data_file(data_file_path) if data_file_path else None
+        return cls(layers, b1, b2, data_map=data_map)
 
     def locate_atom(self, atom_id: int) -> Atom:
         """returns Atom object summarizing corresponding line in atoms data file"""
+        if self._data_map is None:
+            raise StructureError("the data map is not defined, can not locate atoms")
         return self._data_map[atom_id]
 
 

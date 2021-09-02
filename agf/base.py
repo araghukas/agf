@@ -4,7 +4,7 @@ Base classes for setting up calculations, but not running them.
 import numpy as np
 from typing import Tuple, Dict, Union
 
-from agf.structure import StructureSystem
+from agf.structure import StructureSystem, StructureError
 from agf.utility import (fold_matrix,
                          unfold_matrix,
                          read_fc,
@@ -61,6 +61,11 @@ class _HarmonicMatrices:
         return self._tau1.copy()
 
     @property
+    def tau_LC_LD(self):
+        """... between left contact surface and device"""
+        return self._tau_LC_LD.copy()
+
+    @property
     def tau_LC_LCB(self):
         """... between surface and bulk of the first contact"""
         return self._tau_LC_LCB.copy()
@@ -74,6 +79,11 @@ class _HarmonicMatrices:
     def tau2(self):
         """connection matrix between second contact and device; H_tot[1,2]"""
         return self._tau2.copy()
+
+    @property
+    def tau_RC_RD(self):
+        """... between surface and bulk of the second contact"""
+        return self._tau_RC_RD.copy()
 
     @property
     def tau_RC_RCB(self):
@@ -161,8 +171,8 @@ class _HarmonicMatrices:
         b1d = nc1 + nd
         d1d = nc1
         self._tau1 = unfold_matrix(folded_fcs[a1d:b1d, 0:d1d])
-        self._tau1s = slice_top_right(self._tau1, ns1, ns1)
-        self._tau1s_H = self._tau1s.conj().T
+        self._tau_LC_LD = slice_top_right(self._tau1, ns1, ns1)
+        self._tau_LC_LD_H = self._tau_LC_LD.conj().T
 
         # device region
         add = nc1
@@ -175,8 +185,8 @@ class _HarmonicMatrices:
         cd2 = nc1 + nd
         dd2 = N
         self._tau2 = unfold_matrix(folded_fcs[ad2:bd2, cd2:dd2])
-        self._tau2s = slice_bottom_left(self._tau2, ns2, ns2)
-        self._tau2s_H = self._tau2s.conj().T
+        self._tau_RC_RD = slice_bottom_left(self._tau2, ns2, ns2)
+        self._tau_RC_RD_H = self._tau_RC_RD.conj().T
 
         # second contact
         a22 = nc1 + nd
@@ -185,13 +195,27 @@ class _HarmonicMatrices:
 
         # inside first contact
         self._H_LC = unfold_matrix(folded_fcs[nLCB:nc1, nLCB:nc1])
-        self._H_LCB = unfold_matrix(folded_fcs[0:nLCB, 0:nLCB])
         self._tau_LC_LCB = unfold_matrix(folded_fcs[nLCB:nc1, 0:nLCB])
+        if nLCB <= 0:
+            raise StructureError("missing bulk portion of left contact")
+        elif nLCB < 2:
+            self._H_LCB = folded_fcs[0:b11, 0:b11]
+            self._H_LCB[-1][-1] = self._H_LCB[0][0]
+            self._H_LCB = unfold_matrix(self._H_LCB)
+        else:
+            self._H_LCB = unfold_matrix(folded_fcs[0:nLCB, 0:nLCB])
 
         # inside second contact
         self._H_RC = unfold_matrix(folded_fcs[a22:-nRCB, a22:-nRCB])
         self._tau_RC_RCB = unfold_matrix(folded_fcs[a22:-nRCB, -nRCB:])
-        self._H_RCB = unfold_matrix(folded_fcs[-nRCB:, -nRCB:])
+        if nRCB <= 0:
+            raise StructureError("missing bulk portion of second contact")
+        elif nRCB < 2:
+            self._H_RCB = folded_fcs[a22:b22, a22:b22]
+            self._H_RCB[0][0] = self._H_RCB[-1][-1]
+            self._H_RCB = unfold_matrix(self._H_RCB)
+        else:
+            self._H_RCB = unfold_matrix(folded_fcs[-nRCB:, -nRCB:])
 
         # to avoid counting again
         self._ns1 = ns1
