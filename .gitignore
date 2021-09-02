@@ -1,4 +1,4 @@
 log.lammps
-tests/
+old_tests/
 .idea/
 **/__pycache__/
