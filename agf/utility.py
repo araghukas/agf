@@ -56,11 +56,11 @@ def flatten_list(nested_list: List[list]) -> list:
     return flat_list
 
 
-# @jit(nopython=True)
+@jit(nopython=True, cache=True)
 def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     """fold a shape (M,N) matrix to shape (m,n,p,q) where m=M/p and n=N/q"""
     M, N = arr.shape
-    new_arr = np.zeros((M // p, N // q, p, q))
+    new_arr = np.zeros((M // p, N // q, p, q), dtype=arr.dtype)
     for i in range(M):
         for j in range(N):
             val = arr[i][j]
@@ -73,11 +73,11 @@ def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     return new_arr
 
 
-# @jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True)
 def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     """unfold a shape (m,n,p,q) matrix to shape (M,N) where M=p*m and N=q*n"""
     m, n, p, q = arr.shape
-    new_arr = np.zeros((m * p, n * q))
+    new_arr = np.zeros((m * p, n * q), dtype=arr.dtype)
 
     for i in range(m):
         i0 = p * i
