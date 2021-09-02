@@ -7,9 +7,20 @@ See:
 """
 import numpy as np
 from numpy.linalg import norm, inv
+from numba import jit
+
 from typing import Tuple
+from dataclasses import dataclass
 
 from agf.utility import fold_matrix
+
+
+@dataclass(frozen=True)
+class DecimationResult:
+    Ws: np.ndarray  # effective matrix (Ιω**2 - Hs) for surface
+    Wb: np.ndarray  # ... for bulk
+    a: np.ndarray  # surface connection matrix
+    b: np.ndarray  # conjugate surface connection matrix
 
 
 def decimate(arr: np.ndarray,
@@ -17,7 +28,8 @@ def decimate(arr: np.ndarray,
              delta: float,
              d: int,
              abs_tol: float = 1e-6,
-             homogeneous: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+             homogeneous: bool = True,
+             flip: bool = False) -> DecimationResult:
     """
     Implements the decimation algorithm described by Sancho-Rubio.
 
@@ -27,8 +39,11 @@ def decimate(arr: np.ndarray,
     :param d: the block size (number of degrees of freedom).
     :param abs_tol: convergence tolerance for norm of connection matrix (default 1e-6)
     :param homogeneous: assume the matrix has repeating elements (i.e. layers).
+    :param flip: flip the matrix before decimation
     :return: the effective surface and bulk matrices (Iw**2 - H)
     """
+    if flip:
+        arr = np.flip(arr)
     if not arr.ndim == 2:
         raise ValueError("input array is not 2-dimensional")
 
@@ -45,19 +60,23 @@ def decimate(arr: np.ndarray,
         a = arr[0][1]
         b = a.conj().T
         eps = arr[0][0]
-        W0, Wb = _homogeneous_decimation(w2I, a, b, eps, abs_tol)
+        Ws, Wb, a, b = _homogeneous_decimation(w2I, a, b, eps, abs_tol)
     else:
         raise NotImplementedError(
             "sorry, can't decimate for inhomogeneous contacts yet.")
 
-    return W0, Wb
+    return DecimationResult(Ws, Wb, a, b)
 
 
+@jit(nopython=True, cache=True)
 def _homogeneous_decimation(omega: np.ndarray,
                             a: np.ndarray,
                             b: np.ndarray,
                             eps: np.ndarray,
-                            max_tol: float) -> Tuple[np.ndarray, np.ndarray]:
+                            max_tol: float) -> Tuple[np.ndarray,
+                                                     np.ndarray,
+                                                     np.ndarray,
+                                                     np.ndarray]:
     tol = np.inf
     eps_s = eps.copy()
     while tol > max_tol:
@@ -75,6 +94,6 @@ def _homogeneous_decimation(omega: np.ndarray,
         # update tolerance value
         tol = norm(a)
 
-    W0 = omega - eps_s
+    Ws = omega - eps_s
     Wb = omega - eps
-    return W0, Wb
+    return Ws, Wb, a, b
