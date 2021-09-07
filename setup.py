@@ -6,6 +6,6 @@ setup(
     version=__version__,
     description="A package for computing Atomistic Green's Functions based on the Zhang-Mingo method.",
     author="Ara Ghukasyan",
-    install_requires=["numpy", "pandas"],
+    install_requires=["numpy"],
     packages=find_packages()
 )
