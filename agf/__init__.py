@@ -6,6 +6,8 @@ from agf.structure import Section
 from agf.agf import AGF
 from agf.hm import HarmonicMatrix
 
+__version__ = "7Sept2021"
+
 
 def get_solver(atom_positions_file: str,
                layer_map_file: str,
@@ -120,11 +122,20 @@ def compute_transmission(omegas: Sequence[float],
         i_freq += 1
 
     if save_results:
-        from pandas import DataFrame
-        df = DataFrame({
-            "omega": omegas,
-            "transmission": trans
-        })
-        df.to_csv(results_savename)
+        try:
+            from pandas import DataFrame
+            df = DataFrame({
+                "omega": omegas,
+                "transmission": trans
+            })
+            df.to_csv(results_savename)
+        except ModuleNotFoundError:
+            with open(results_savename, 'w') as f:
+                f.write(",omega,transmission\n")
+                i = 0
+                for omega, t in zip(omegas, trans):
+                    f.write("{:d},{:f},{:f}\n".format(i, omega, t))
+                    i += 1
+                f.write("\n")
 
     return trans
