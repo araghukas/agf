@@ -59,8 +59,9 @@ class AGF(_HarmonicMatrices):
         """
 
         # decimation for contact surface Green's functions
-        db1 = decimate(self._H_LCB, omega, delta, self._n_dof, flip=True)
-        db2 = decimate(self._H_RCB, omega, delta, self._n_dof)
+        nB = len(self._struct.contact1[0].ids)
+        db1 = decimate(self._H_LCB, omega, delta, nB, flip=True)
+        db2 = decimate(self._H_RCB, omega, delta, nB)
         g_LCB = np.linalg.inv(db1.Ws)
         g_RCB = np.linalg.inv(db2.Ws)
 
