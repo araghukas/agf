@@ -1,5 +1,6 @@
 log.lammps
 old_tests/
+my_tests/
 .idea/
 *.png
 *.pdf
