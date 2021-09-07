@@ -3,4 +3,5 @@ old_tests/
 .idea/
 *.png
 *.pdf
+*.csv
 **/__pycache__/
