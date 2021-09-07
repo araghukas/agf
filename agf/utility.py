@@ -1,4 +1,4 @@
-"""A module of utility functions for AGF computations"""
+"""Misc. useful functions for Atomistic Green's Function computations."""
 from numba import jit
 from typing import Sequence
 import numpy as np

@@ -1,3 +1,4 @@
+"""Creation and manipulation of the total harmonic matrix."""
 from typing import List, Union, Sequence
 from os.path import expanduser
 import numpy as np

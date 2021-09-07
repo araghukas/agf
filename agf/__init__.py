@@ -1,3 +1,4 @@
+"""A module for calculating Atomistic Green's Function using the `AGF` solver."""
 from dataclasses import dataclass
 from typing import Union, Sequence, Dict
 import numpy as np
