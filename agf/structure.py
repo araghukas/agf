@@ -1,155 +1,101 @@
-import os
+from enum import IntEnum
+from dataclasses import dataclass
+from typing import List
+from os.path import expanduser
 import numpy as np
 
-from typing import List, Dict
-from dataclasses import dataclass
+
+class Section(IntEnum):
+    """an enumeration of simulation sections as per Zhang-Mingo"""
+    LCB = 0  # left contact bulk
+    LC = 1  # left contact surface
+    D = 2  # device
+    RC = 3  # right contact surface
+    RCB = 4  # right contact bulk
 
 
-@dataclass
+@dataclass(frozen=True)
 class Atom:
     """an atom of some type at some position in 3D space"""
-    index: int
+    ID: int
     typ: int
-    position: np.ndarray = None
+    position: np.ndarray
 
 
-@dataclass
+@dataclass(frozen=True)
 class Layer:
-    """
-    An ordered group of atoms organized by ID and type.
-    These are stacked to produce structure systems for AGF.
-    """
-    index: int
-    ids: List[int]
-    types: List[int] = None
+    """a collection of atoms"""
+    number: int
+    atoms: List[Atom]
 
     @property
-    def N(self) -> int:
-        """number of atoms in the layer"""
-        return len(self.ids)
-
-    def __post_init__(self):
-        if self.types is not None and len(self.ids) != len(self.types):
-            raise ValueError("lengths of ids and types lists are not equal")
+    def IDs(self) -> List[int]:
+        """ordered IDs of all constituent atoms"""
+        return [atom.ID for atom in self.atoms]
 
     def __len__(self):
-        return len(self.ids)
+        """number of atoms"""
+        return len(self.atoms)
 
 
-class StructureError(Exception):
-    """labelled error for structure-specific errors"""
+def only_numerical_entries(line: str) -> bool:
+    """return True if line contains only numbers and spaces"""
+    if len(line) == 0:
+        return False
+
+    for c in line:
+        if c.isspace() or c == '.':
+            continue
+        if not c.isdigit():
+            return False
+    return True
 
 
-class StructureSystem:
+def read_atoms(atom_positions_file: str,
+               layer_map_file: str) -> List[Layer]:
     """
-    Generic contact-device-contact structure for AGF calculations.
-    Each of the three sections is a list of Layers.
+    Construct a list of layers containing atoms with ID, type, and position.
+
+    The `atom_positions` file should contain a line for each atoms of the form:
+
+        ID TYPE x y z ...
+
+    only the first 5 space-delimited entries are used. This function finds those lines
+    by skipping ahead to lines with ONLY numerical entries and of length at least 5.
+
+    The `layer_map_file` should be of the form:
+
+        # comment line
+        1 N1
+            id11 type11
+            id12 type12
+            id13 type13
+            ....
+            id1(N1) type1(N1)
+        2 N2
+            id21 type21
+            id22 type22
+            ...
+            id2(N2) type2(N2)
+        ...
     """
+    atom_positions_file = expanduser(atom_positions_file)
+    positions_dict = {}  # {ID: [x, y, z]}
+    with open(atom_positions_file) as f_atom:
+        lines = [line.strip() for line in f_atom.readlines()]
 
-    @property
-    def layers(self) -> List[Layer]:
-        """list of all layers"""
-        return self._layers
+        for line in lines:
+            if not only_numerical_entries(line):
+                # skip to atoms section
+                continue
+            entries = line.split()
+            ID = int(entries[0])
+            position = np.array([float(x) for x in entries[2:5]])
+            positions_dict[ID] = position
 
-    @property
-    def contact1(self) -> List[Layer]:
-        """list of layers belonging to first contact"""
-        return self._contact1
-
-    @property
-    def device(self) -> List[Layer]:
-        """list of layers belonging to device portion"""
-        return self._device
-
-    @property
-    def contact2(self) -> List[Layer]:
-        """list of layers belonging to second contact"""
-        return self._contact2
-
-    @property
-    def n1(self) -> int:
-        """number of atoms in the first contact"""
-        return self._n1
-
-    @property
-    def nd(self) -> int:
-        """number of atoms in the device"""
-        return self._nd
-
-    @property
-    def n2(self) -> int:
-        """number of atoms in the second contact"""
-        return self._n2
-
-    @property
-    def section_ids(self) -> List[List[List[int]]]:
-        """list of ids in contact1, device, and contact2 regions"""
-        return [
-            [layer.ids for layer in self.contact1],
-            [layer.ids for layer in self.device],
-            [layer.ids for layer in self.contact2]
-        ]
-
-    def __init__(self, layers: List[Layer], b1: int, b2: int, data_map: Dict[int, Atom] = None):
-        self._layers = layers
-        if not (0 < b1 < b2 < len(self.layers)):
-            raise ValueError("invalid boundary layer indices b1 = %d, b2 = %d"
-                             % (b1, b2))
-        self._assign_layers(b1, b2)
-        self._data_map = data_map
-
-    def _assign_layers(self, b1: int, b2: int) -> None:
-        """
-        Based on the boundaries, create lists of layers representing
-        each of three regions.
-        """
-        # first contact: layers [0,b1]
-        c1 = [i for i in range(b1 + 1)]
-        self._contact1 = [self._layers[layer_number] for layer_number in c1]
-        self._n1 = sum(layer.N for layer in self._contact1)
-
-        # device: layers (b1,b2]
-        dv = [i for i in range(b1 + 1, b2 + 1)]
-        self._device = [self._layers[layer_number] for layer_number in dv]
-        self._nd = sum(layer.N for layer in self._device)
-
-        # second contact (b2,N]
-        c2 = [i for i in range(b2 + 1, len(self.layers))]
-        self._contact2 = [self._layers[layer_number] for layer_number in c2]
-        self._n2 = sum(layer.N for layer in self._contact2)
-
-    @classmethod
-    def from_files(cls, map_file_path: str,
-                   b1: int, b2: int, data_file_path: str = None):
-        """
-        Initialize a CDC structure using a layer map file and two boundaries
-        to divide the layers into a contact-device-contact structure.
-
-        :param map_file_path: path to layer map file
-        :param data_file_path: path to atoms data file
-        :param b1: largest index of plane in first contact (inclusive)
-        :param b2: largest index of plane in device (inclusive)
-        NOTE: these indices start with 0.
-        """
-
-        layers = read_layer_map(map_file_path)
-        data_map = read_data_file(data_file_path) if data_file_path else None
-        return cls(layers, b1, b2, data_map=data_map)
-
-    def locate_atom(self, atom_id: int) -> Atom:
-        """returns Atom object summarizing corresponding line in atoms data file"""
-        if self._data_map is None:
-            raise StructureError("the data map is not defined, can not locate atoms")
-        return self._data_map[atom_id]
-
-
-def read_layer_map(file_path: str) -> List[Layer]:
-    """
-    Read a layer map file generated by the 'nwlattice' package
-    """
     layers = []
-    file_path = os.path.expanduser(file_path)
-    with open(file_path) as f:
+    layer_map_file = expanduser(layer_map_file)
+    with open(layer_map_file) as f:
         # skip comment line
         f.readline()
 
@@ -157,60 +103,22 @@ def read_layer_map(file_path: str) -> List[Layer]:
         line = f.readline()
         nums = [int(x) for x in line.split()[1:]]
         layer_number = nums[0]
-        layer_types = []
-        layer_ids = []
-
+        atoms = []
         line = f.readline()
+
+        atom_idx = 0
         while line:
             if line.startswith("layer"):
-                layers.append(Layer(layer_number, layer_ids, layer_types))
+                layers.append(Layer(layer_number, atoms))
                 nums = [int(x) for x in line.split()[1:]]
                 layer_number = nums[0]
-                layer_types = []
-                layer_ids = []
+                atoms = []
             else:
-                nums = [int(x) for x in line.split()]
-                layer_types.append(nums[0])
-                layer_ids.append(nums[1])
+                ID, typ = [int(x) for x in line.split()]
+                atoms.append(Atom(ID, typ, positions_dict[ID]))
+                atom_idx += 1
             line = f.readline()
-        layers.append(Layer(layer_number, layer_ids, layer_types))
+
+        layers.append(Layer(layer_number, atoms))
 
     return layers
-
-
-def read_data_file(file_path: str) -> Dict[int, Atom]:
-    """
-    Read an xyz data file to get position for every atom by id.
-    Returns a dictionary {atom_id: Atom(typ, position)}
-    """
-    ids_map = {}
-    file_path = os.path.expanduser(file_path)
-    with open(file_path) as f:
-        # skip to atoms section
-        line = f.readline()
-        while line:
-            line = line.strip()
-            words = line.split()
-            if len(words) < 5:
-                line = f.readline()
-                continue
-
-            chars = ''.join(c for c in line if not c.isdigit()).strip('. ')
-            if not chars:
-                break
-            else:
-                line = f.readline()
-
-        # proceed to read atoms <ID, typ, x, y, z>
-        index = 0
-        while line:
-            str_nums = [s for s in line.split()]
-            atom_id = int(str_nums[0])
-            typ = int(str_nums[1])
-            position = np.array([float(x) for x in str_nums[2:5]])
-
-            ids_map[atom_id] = Atom(index, typ, position)
-            line = f.readline()
-            index += 1
-
-    return ids_map

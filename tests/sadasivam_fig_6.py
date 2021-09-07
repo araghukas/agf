@@ -6,7 +6,6 @@ from math import sqrt
 from typing import Iterable
 
 import numpy as np
-import agf
 
 # constants
 fc = 25.  # N/m
@@ -27,21 +26,17 @@ def get_sadasivam_fcs() -> np.ndarray:
     f33 = 2. * fd / md
 
     return np.array([
-        # -5,  -4,  -3,  -2,  -1,  +0,  +1
-        [f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0],  # -5
-        [f10, f11, f12, 0.0, 0.0, 0.0, 0.0],  # -4
-        [0.0, f12, f22, f23, 0.0, 0.0, 0.0],  # -3
-        [0.0, 0.0, f23, f33, f23, 0.0, 0.0],  # -2
-        [0.0, 0.0, 0.0, f23, f22, f12, 0.0],  # -1
-        [0.0, 0.0, 0.0, 0.0, f12, f11, f10],  # +0
-        [0.0, 0.0, 0.0, 0.0, 0.0, f10, f00],  # +1
+        # -6,  -5,  -4,  -3,  -2,  -1,  +0,  +1,  +2
+        [f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # -6
+        [f10, f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # -5
+        [0.0, f10, f11, f12, 0.0, 0.0, 0.0, 0.0, 0.0],  # -4
+        [0.0, 0.0, f12, f22, f23, 0.0, 0.0, 0.0, 0.0],  # -3
+        [0.0, 0.0, 0.0, f23, f33, f23, 0.0, 0.0, 0.0],  # -2
+        [0.0, 0.0, 0.0, 0.0, f23, f22, f12, 0.0, 0.0],  # -1
+        [0.0, 0.0, 0.0, 0.0, 0.0, f12, f11, f10, 0.0],  # +0
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f10, f00, f10],  # +1
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f10, f00]  # +2
     ])
-
-
-def get_sadasivam_structure() -> agf.structure.StructureSystem:
-    """construct the linear chain structure"""
-    layers = [agf.structure.Layer(i, [i + 6]) for i in range(-5, 2)]
-    return agf.structure.StructureSystem(layers, 1, 4)
 
 
 def plot_Fig_6(omegas: Iterable[float],
@@ -72,9 +67,34 @@ def plot_Fig_6(omegas: Iterable[float],
 
 
 def main(n_omegas: int = 300):
-    model = agf.AGF(struct=get_sadasivam_structure(),
-                    force_constants=get_sadasivam_fcs(),
-                    sort_force_constants=False, n_dof=1)
+    from agf import HarmonicMatrix, AGF, Section
+    from agf.structure import Atom, Layer
+    from agf.utility import fold_matrix
+
+    fcs = get_sadasivam_fcs()
+    fcs = fold_matrix(fcs, 1, 1)
+
+    layers = [
+        Layer(-6, [Atom(1, 1, np.array([0., 0., -6.]))]),
+        Layer(-5, [Atom(1, 1, np.array([0., 0., -5.]))]),
+        Layer(-4, [Atom(1, 1, np.array([0., 0., -4.]))]),
+        Layer(-3, [Atom(1, 2, np.array([0., 0., -3.]))]),
+        Layer(-2, [Atom(1, 2, np.array([0., 0., -2.]))]),
+        Layer(-1, [Atom(1, 2, np.array([0., 0., -1.]))]),
+        Layer(0, [Atom(1, 1, np.array([0., 0., 0.]))]),
+        Layer(1, [Atom(1, 1, np.array([0., 0., 1.]))]),
+        Layer(2, [Atom(1, 1, np.array([0., 0., 2.]))])
+    ]
+
+    hm = HarmonicMatrix(fcs, layers)
+    layer_assignments = {
+        Section.LCB: [-6, -5],
+        Section.LC: -4,
+        Section.D: [-3, -2, -1],
+        Section.RC: 0,
+        Section.RCB: [1, 2]
+    }
+    model = AGF(hm, layer_assignments)
 
     trans = []
     dos = []
@@ -84,7 +104,7 @@ def main(n_omegas: int = 300):
     for omega, delta in zip(omegas, deltas):
         r = model.compute(omega, delta)
         trans.append(r.transmission)
-        dos.append(r.dos[1][1] / l0)  # dos at centre 'layer' of device
+        dos.append((r.dos[1][1] / l0).real)  # dos at centre 'layer' of device
 
     plot_Fig_6(omegas, trans, dos)
 
