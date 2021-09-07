@@ -22,6 +22,8 @@ class AGF:
     via the `compute(omega, delta)` method.
     """
 
+    PRINT_LOG = True
+
     @dataclass(frozen=True)
     class _ComputeConstants:
         """constant values container for AGF instances"""
@@ -73,6 +75,7 @@ class AGF:
     @layer_assignments.setter
     def layer_assignments(self,
                           section_layers_map: Dict[Union[int, Section], Sequence[int]]):
+        self.print("assigning layers")
 
         # convert all keys to Sections
         section_layers_map = {Section(k): v for k, v in section_layers_map.items()}
@@ -100,7 +103,7 @@ class AGF:
 
     def _validate_assignments(self) -> None:
         """check matrix/section assignments for incompatible values"""
-
+        self.print("validating sections and matrices")
         # check that the LCB and RCB contain more than one layer
         # check that the layers lists are non-empty
         layers_L = [self._hm.layers[i] for i in self._lass[Section.LCB]]
@@ -115,8 +118,23 @@ class AGF:
         elif np.any(np.diff([len(layer) for layer in layers_R]) != 0):
             raise ValueError("unequal layers lengths in RCB.")
 
+        # check assumptions about Sections hold
+        H_LCB_D = self.get_matrix(Section.LCB, Section.D)
+        if not np.linalg.norm(H_LCB_D) == 0.0:
+            warnings.warn("LCB-D interaction is non-zero.")
+        H_D_LCB = self.get_matrix(Section.D, Section.LCB)
+        if not np.linalg.norm(H_D_LCB) == 0.0:
+            warnings.warn("D-LCB interaction is non-zero.")
+        H_RCB_D = self.get_matrix(Section.RCB, Section.D)
+        if not np.linalg.norm(H_RCB_D) == 0.0:
+            warnings.warn("RCB-D interaction is non-zero.")
+        H_D_RCB = self.get_matrix(Section.D, Section.RCB)
+        if not np.linalg.norm(H_D_RCB) == 0.0:
+            warnings.warn("D-RCB interaction is non-zero.")
+
     def _get_compute_constants(self):
         """pre-compute constant values for efficiency"""
+        self.print("pre-computing constant values")
         n_dof = self._hm.force_constants.shape[-1]
         layers_LCB = [self._hm.layers[i] for i in self._lass[Section.LCB]]
         layers_RCB = [self._hm.layers[i] for i in self._lass[Section.RCB]]
@@ -245,6 +263,12 @@ class AGF:
         M2 = 1.j * (seR - seR.conj().T)
 
         return GreensFunctionMatrix(omega, delta, G, M1, M2)
+
+    @staticmethod
+    def print(s: str) -> None:
+        """optional logging of progress"""
+        if AGF.PRINT_LOG:
+            print(s)
 
 
 @dataclass(frozen=True)

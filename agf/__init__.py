@@ -9,6 +9,14 @@ from agf.hm import HarmonicMatrix
 __version__ = "7Sept2021"
 
 
+def disable_log():
+    AGF.PRINT_LOG = False
+
+
+def enable_log():
+    AGF.PRINT_LOG = True
+
+
 def get_solver(atom_positions_file: str,
                layer_map_file: str,
                force_constants_file: str,
@@ -16,7 +24,8 @@ def get_solver(atom_positions_file: str,
                sort_atoms: bool = True,
                atoms_sort_coordinate: Union[int, int] = 2,
                sort_force_constants: bool = True,
-               atom_dof: int = 3) -> AGF:
+               atom_dof: int = 3,
+               log_progress: bool = True) -> AGF:
     """
     Create an Atomistic Green's Function solver from data files and layer assignments.
 
@@ -28,6 +37,7 @@ def get_solver(atom_positions_file: str,
     :param atoms_sort_coordinate: first, second, or third cartesian coordinate
     :param sort_force_constants: sort force constants into same ID order as layers
     :param atom_dof: number of degrees of freedom per atom
+    :param log_progress: print AGF progress messages
     :return: an AGF instance, ready to compute Green's functions.
     """
     from agf.structure import read_atoms
@@ -35,16 +45,21 @@ def get_solver(atom_positions_file: str,
                         read_force_constants,
                         sort_force_constants_by_layer)
 
+    if not log_progress:
+        disable_log()
     layers = read_atoms(atom_positions_file, layer_map_file)
     if sort_atoms:
+        AGF.print("sorting atoms by coordinate")
         layers = sort_atoms_in_layers(layers, atoms_sort_coordinate)
 
     fcs = read_force_constants(force_constants_file, atom_dof)
     if sort_force_constants:
+        AGF.print("sorting force constants by layer")
         fcs = sort_force_constants_by_layer(fcs, layers)
 
     matrix = HarmonicMatrix(fcs, layers)
-    return AGF(matrix, layer_assignments)
+    model = AGF(matrix, layer_assignments)
+    return model
 
 
 def compute_transmission(omegas: Sequence[float],
@@ -56,6 +71,7 @@ def compute_transmission(omegas: Sequence[float],
                          atoms_sort_coordinate: Union[int, int] = 2,
                          sort_force_constants: bool = True,
                          atom_dof: int = 3,
+                         log_progress: bool = True,
                          delta_func: Callable[[float], float] = None,
                          delta_func_kwargs: dict = None,
                          save_results: bool = True,
@@ -72,6 +88,7 @@ def compute_transmission(omegas: Sequence[float],
     :param atoms_sort_coordinate: first, second, or third cartesian coordinate
     :param sort_force_constants: sort force constants into same ID order as layers
     :param atom_dof: number of degrees of freedom per atom
+    :param log_progress: print AGF progress messages
     :param delta_func: function that returns broadening at each frequency
     :param delta_func_kwargs: dictionary of keyword arguments passed to `delta_func`
     :param save_results: save the results to a CSV file
@@ -88,7 +105,8 @@ def compute_transmission(omegas: Sequence[float],
                        sort_atoms,
                        atoms_sort_coordinate,
                        sort_force_constants,
-                       atom_dof)
+                       atom_dof,
+                       log_progress)
 
     if delta_func is None:
         from agf.utility import get_zhang_delta
@@ -115,10 +133,12 @@ def compute_transmission(omegas: Sequence[float],
     trans = zeros(n_omegas)
 
     i_freq = 1
+    AGF.print("\nindex, omega, transmission")
     for omega, delta in zip(omegas, deltas):
-        print(f"frequency {i_freq}/{n_omegas}")
         result = model.compute(omega, delta)
-        trans[i_freq - 1] = result.transmission
+        t = result.transmission
+        AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e}".format(i_freq-1, omega, t))
+        trans[i_freq - 1] = t
         i_freq += 1
 
     if save_results:
