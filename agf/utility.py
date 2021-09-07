@@ -91,6 +91,25 @@ def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     return new_arr
 
 
+@jit(nopython=True, cache=True)
+def extract_matrix(row_index: np.ndarray, col_index: np.ndarray, arr: np.ndarray) -> np.ndarray:
+    """extract all elements in row_index x col_index, from arr into a new array"""
+    m = row_index.shape[0]
+    n = col_index.shape[0]
+    d = arr.shape[2]
+    matrix = np.zeros((m, n, d, d), dtype=arr.dtype)
+
+    i0 = 0
+    for i in row_index:
+        j0 = 0
+        for j in col_index:
+            matrix[i0][j0] = arr[i][j]
+            j0 += 1
+        i0 += 1
+
+    return matrix
+
+
 def index_nonzero(arr: np.ndarray) -> tuple:
     """
     Extract indices a,b,c,d for arr[a:b, c:d], the largest submatrix of arr
