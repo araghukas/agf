@@ -1,5 +1,7 @@
 """
-Reproduce Sadasivam Figure 6.
+Reproduce Sadasivam Figure 6., see:
+
+    Sadasivam, S., et al. Annual Review of Heat Transfer 17 (2014).
 """
 try:
     from scipy.constants import m_u
