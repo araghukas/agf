@@ -19,7 +19,7 @@ class Layer:
     An ordered group of atoms organized by ID and type.
     These are stacked to produce structure systems for AGF.
     """
-    number: int
+    index: int
     ids: List[int]
     types: List[int] = None
 
@@ -31,6 +31,9 @@ class Layer:
     def __post_init__(self):
         if self.types is not None and len(self.ids) != len(self.types):
             raise ValueError("lengths of ids and types lists are not equal")
+
+    def __len__(self):
+        return len(self.ids)
 
 
 class StructureError(Exception):
