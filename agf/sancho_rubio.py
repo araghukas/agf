@@ -26,7 +26,7 @@ class DecimationResult:
 def decimate(arr: np.ndarray,
              omega: float,
              delta: float,
-             d: int,
+             layer_size: int,
              abs_tol: float = 1e-6,
              homogeneous: bool = True,
              flip: bool = False) -> DecimationResult:
@@ -36,7 +36,7 @@ def decimate(arr: np.ndarray,
     :param arr: assumed to be (Ιω**2 - H) in the eq. (Ιω**2 - H)G = I.
     :param omega: angular frequency
     :param delta: frequency broadening
-    :param d: the block size (number of degrees of freedom).
+    :param layer_size: number of atoms per layers times the number of degrees of freedom.
     :param abs_tol: convergence tolerance for norm of connection matrix (default 1e-6)
     :param homogeneous: assume the matrix has repeating elements (i.e. layers).
     :param flip: flip the matrix before decimation
@@ -48,13 +48,14 @@ def decimate(arr: np.ndarray,
     M = arr.shape[0]
     if not arr.shape[1] == M:
         raise ValueError("input array is not square.")
-    if arr.shape[0] % d != 0:
-        raise ValueError(f"can not divide {M}x{M} array into {d}x{d} blocks.")
+    if arr.shape[0] % layer_size != 0:
+        raise ValueError(
+            f"can not divide {M}x{M} array into {layer_size}x{layer_size} blocks.")
 
-    arr = fold_matrix(arr, d, d)  # returns a new array of blocks
+    arr = fold_matrix(arr, layer_size, layer_size)  # returns a new array of blocks
 
     if homogeneous:
-        w2I = (omega**2 + 1.j * delta) * np.eye(d)
+        w2I = (omega**2 + 1.j * delta) * np.eye(layer_size)
         a = arr[-1][-2] if flip else arr[0][1]
         b = a.conj().T
         eps = arr[-1][-1] if flip else arr[0][0]
