@@ -1,4 +1,6 @@
 log.lammps
 old_tests/
 .idea/
+*.png
+*.pdf
 **/__pycache__/
