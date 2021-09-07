@@ -1,7 +1,11 @@
 """
 Reproduce Sadasivam Figure 6.
 """
-from scipy.constants import m_u
+try:
+    from scipy.constants import m_u
+except ModuleNotFoundError:
+    m_u = 1.6605390666e-27
+
 from math import sqrt
 from typing import Iterable
 
@@ -25,9 +29,10 @@ def get_sadasivam_fcs() -> np.ndarray:
     f23 = -fd / md
     f33 = 2. * fd / md
 
+    # note: matrix extended here for explicit 2-layer LCB/RCB
     return np.array([
-        # -6,  -5,  -4,  -3,  -2,  -1,  +0,  +1,  +2
-        [f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # -6
+        #      -5,  -4,  -3,  -2,  -1,  +0,  +1
+        [f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         [f10, f00, f10, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # -5
         [0.0, f10, f11, f12, 0.0, 0.0, 0.0, 0.0, 0.0],  # -4
         [0.0, 0.0, f12, f22, f23, 0.0, 0.0, 0.0, 0.0],  # -3
@@ -35,7 +40,7 @@ def get_sadasivam_fcs() -> np.ndarray:
         [0.0, 0.0, 0.0, 0.0, f23, f22, f12, 0.0, 0.0],  # -1
         [0.0, 0.0, 0.0, 0.0, 0.0, f12, f11, f10, 0.0],  # +0
         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f10, f00, f10],  # +1
-        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f10, f00]  # +2
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, f10, f00]
     ])
 
 
@@ -67,13 +72,14 @@ def plot_Fig_6(omegas: Iterable[float],
 
 
 def main(n_omegas: int = 300):
+    """manually initialize an AGF solver; compute transmission and dos"""
     from agf import HarmonicMatrix, AGF, Section
     from agf.structure import Atom, Layer
     from agf.utility import fold_matrix
 
+    # initialize the harmonic matrix
     fcs = get_sadasivam_fcs()
-    fcs = fold_matrix(fcs, 1, 1)
-
+    fcs = fold_matrix(fcs, 1, 1)  # need shape (N,N,d,d)
     layers = [
         Layer(-6, [Atom(1, 1, np.array([0., 0., -6.]))]),
         Layer(-5, [Atom(1, 1, np.array([0., 0., -5.]))]),
@@ -85,8 +91,9 @@ def main(n_omegas: int = 300):
         Layer(1, [Atom(1, 1, np.array([0., 0., 1.]))]),
         Layer(2, [Atom(1, 1, np.array([0., 0., 2.]))])
     ]
-
     hm = HarmonicMatrix(fcs, layers)
+
+    # initialize an AGF solver
     layer_assignments = {
         Section.LCB: [-6, -5],
         Section.LC: -4,
@@ -96,9 +103,9 @@ def main(n_omegas: int = 300):
     }
     model = AGF(hm, layer_assignments)
 
+    # run computations
     trans = []
     dos = []
-
     omegas = np.linspace(1e10, 9e13, n_omegas)
     deltas = 1e-7 * omegas**2
     for omega, delta in zip(omegas, deltas):
