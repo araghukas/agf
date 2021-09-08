@@ -54,20 +54,6 @@ class AGF:
         n_RCs: int
 
     @property
-    def harmonic_matrix(self) -> HarmonicMatrix:
-        """
-        Atom-wise matrix of d-dimensional harmonic interactions between pairs,
-        a.k.a. the 'force constants' matrix.
-        """
-        return self._hm
-
-    @harmonic_matrix.setter
-    def harmonic_matrix(self, _hm: HarmonicMatrix):
-        if not isinstance(_hm, HarmonicMatrix):
-            raise TypeError(f"can not assign {type(_hm)} to harmonic matrix.")
-        self._hm = _hm
-
-    @property
     def layer_assignments(self) -> Dict[Section, Sequence[int]]:
         """dictionary matching one or more layers to a specific Section"""
         return self._lass
@@ -95,7 +81,7 @@ class AGF:
                  harmonic_matrix: HarmonicMatrix,
                  layer_assignments: Dict[Union[int, Section], Sequence[int]]):
         self._sections = {s: None for s in Section}
-        self.harmonic_matrix = harmonic_matrix
+        self._hm = harmonic_matrix
         self.layer_assignments = layer_assignments
 
         self._validate_assignments()
@@ -119,16 +105,16 @@ class AGF:
             raise ValueError("unequal layers lengths in RCB.")
 
         # check assumptions about Sections hold
-        H_LCB_D = self.get_matrix(Section.LCB, Section.D)
+        H_LCB_D = self._get_matrix(Section.LCB, Section.D)
         if not np.linalg.norm(H_LCB_D) == 0.0:
             warnings.warn("LCB-D interaction is non-zero.")
-        H_D_LCB = self.get_matrix(Section.D, Section.LCB)
+        H_D_LCB = self._get_matrix(Section.D, Section.LCB)
         if not np.linalg.norm(H_D_LCB) == 0.0:
             warnings.warn("D-LCB interaction is non-zero.")
-        H_RCB_D = self.get_matrix(Section.RCB, Section.D)
+        H_RCB_D = self._get_matrix(Section.RCB, Section.D)
         if not np.linalg.norm(H_RCB_D) == 0.0:
             warnings.warn("RCB-D interaction is non-zero.")
-        H_D_RCB = self.get_matrix(Section.D, Section.RCB)
+        H_D_RCB = self._get_matrix(Section.D, Section.RCB)
         if not np.linalg.norm(H_D_RCB) == 0.0:
             warnings.warn("D-RCB interaction is non-zero.")
 
@@ -140,7 +126,7 @@ class AGF:
         layers_RCB = [self._hm.layers[i] for i in self._lass[Section.RCB]]
         n_LCBs = n_dof * len(layers_LCB[-1])
         n_RCBs = n_dof * len(layers_RCB[0])
-        H_D = self.get_matrix(Section.D)
+        H_D = self._get_matrix(Section.D)
         n_D = H_D.shape[0] * n_dof
         layers_LC = [self._hm.layers[i] for i in self._lass[Section.LC]]
         layers_RC = [self._hm.layers[i] for i in self._lass[Section.RC]]
@@ -171,12 +157,12 @@ class AGF:
         t_D_RCs = self._hm.get_interaction(self._lass[Section.D][-1],
                                            self._lass[Section.RC][0])
 
-        return AGF._ComputeConstants(
-            H_D=unfold_matrix(self.get_matrix(Section.D)),
-            H_LCB=unfold_matrix(self.get_matrix(Section.LCB)),
-            H_RCB=unfold_matrix(self.get_matrix(Section.RCB)),
-            H_LC=unfold_matrix(self.get_matrix(Section.LC)),
-            H_RC=unfold_matrix(self.get_matrix(Section.RC)),
+        consts = AGF._ComputeConstants(
+            H_D=unfold_matrix(self._get_matrix(Section.D)),
+            H_LCB=unfold_matrix(self._get_matrix(Section.LCB)),
+            H_RCB=unfold_matrix(self._get_matrix(Section.RCB)),
+            H_LC=unfold_matrix(self._get_matrix(Section.LC)),
+            H_RC=unfold_matrix(self._get_matrix(Section.RC)),
             t_LC_LCBs=unfold_matrix(t_LC_LCBs),
             t_LCBs_LC=unfold_matrix(t_LCBs_LC),
             t_RC_RCBs=unfold_matrix(t_RC_RCBs),
@@ -193,8 +179,10 @@ class AGF:
             n_LCs=n_LCs,
             n_RCs=n_RCs
         )
+        del self._hm  # to save memory, no longer needed
+        return consts
 
-    def get_matrix(self, *key):
+    def _get_matrix(self, *key):
         """get the interaction matrix between any two Sections"""
         n_keys = len(key)
         if n_keys == 0 or n_keys > 2:
