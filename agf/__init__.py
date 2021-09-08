@@ -6,7 +6,7 @@ from agf.structure import Section
 from agf.agf import AGF
 from agf.hm import HarmonicMatrix
 
-__version__ = "7Sept2021"
+__version__ = "2021.1"
 
 
 def disable_log():
