@@ -6,7 +6,6 @@ See:
     Sancho, M. P. L. et al., Journal of Physics F: Metal Physics 15 (4): 851–58 (1985)
 """
 import numpy as np
-from numpy.linalg import norm, inv
 from numba import jit
 
 from typing import Tuple
@@ -79,7 +78,7 @@ def _homogeneous_decimation(omega: np.ndarray,
     tol = np.inf
     eps_s = eps.copy()
     while tol > max_tol:
-        g = inv(omega - eps)
+        g = np.linalg.inv(omega - eps)
 
         # update diagonal elements
         agb = a @ g @ b  # no need to compute twice
@@ -91,7 +90,7 @@ def _homogeneous_decimation(omega: np.ndarray,
         a = a @ g @ a
 
         # update tolerance value
-        tol = norm(a)
+        tol = np.linalg.norm(a)
 
     Ws = omega - eps_s
     Wb = omega - eps
