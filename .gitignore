@@ -1,1 +1,8 @@
 .DS_Store
+.idea/
+*/__pycache__
+*_tests/
+log.lammps
+*.csv
+*.png
+
