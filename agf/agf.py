@@ -233,13 +233,13 @@ class AGF:
         seL = I_D.copy()
         t_LCs_D = self._const.t_LCs_D
         t_D_LCs = self._const.t_D_LCs
-        seL[-n_LCs:, -n_LCs:] = t_LCs_D @ gLs @ t_D_LCs
+        seL[-n_LCs:, -n_LCs:] = t_D_LCs @ gLs @ t_LCs_D
 
         n_RCs = self._const.n_RCs
         seR = I_D.copy()
         t_RCs_D = self._const.t_RCs_D
         t_D_RCs = self._const.t_D_RCs
-        seR[:n_RCs, :n_RCs] = t_RCs_D @ gRs @ t_D_RCs
+        seR[:n_RCs, :n_RCs] = t_D_RCs @ gRs @ t_RCs_D
 
         # compute the 'device' Green's function
         w2I_D = omega**2 * I_D
