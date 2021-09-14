@@ -55,9 +55,9 @@ def decimate(arr: np.ndarray,
 
     if homogeneous:
         w2I = (omega**2 + 1.j * delta) * np.eye(layer_size)
-        a = arr[-1][-2] if flip else arr[0][1]
-        b = a.conj().T
-        eps = arr[-1][-1] if flip else arr[0][0]
+        a = np.ascontiguousarray(arr[-1][-2] if flip else arr[0][1])
+        b = np.ascontiguousarray(a.conj().T)
+        eps = np.ascontiguousarray(arr[-1][-1] if flip else arr[0][0])
         Ws, Wb, a, b = _homogeneous_decimation(w2I, a, b, eps, abs_tol)
     else:
         raise NotImplementedError(
