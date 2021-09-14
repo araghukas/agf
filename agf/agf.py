@@ -50,8 +50,8 @@ class AGF:
         n_LCBs: int  # unfolded LCB surface matrix size
         n_RCBs: int
 
-        n_LCs: int  # LC surface size
-        n_RCs: int
+        n_DsL: int  # size of device left surface
+        n_DsR: int  # size of device right surface
 
     @property
     def layer_assignments(self) -> Dict[Section, Sequence[int]]:
@@ -123,14 +123,13 @@ class AGF:
         n_dof = self._hm.harmonic_constants.shape[-1]
         layers_LCB = [self._hm.layers[i] for i in self._lass[Section.LCB]]
         layers_RCB = [self._hm.layers[i] for i in self._lass[Section.RCB]]
+        layers_D = [self._hm.layers[i] for i in self._lass[Section.D]]
         n_LCBs = n_dof * len(layers_LCB[-1])
         n_RCBs = n_dof * len(layers_RCB[0])
         H_D = self._get_matrix(Section.D)
         n_D = H_D.shape[0] * n_dof
-        layers_LC = [self._hm.layers[i] for i in self._lass[Section.LC]]
-        layers_RC = [self._hm.layers[i] for i in self._lass[Section.RC]]
-        n_LCs = n_dof * len(layers_LC[-1])
-        n_RCs = n_dof * len(layers_RC[0])
+        n_DsL = n_dof * len(layers_D[0])
+        n_DsR = n_dof * len(layers_D[-1])
 
         t_LCBs_LC = self._hm.get_interaction(self._lass[Section.LCB][-1],
                                              self._lass[Section.LC][0])
@@ -175,8 +174,8 @@ class AGF:
             I_RCBs=np.eye(n_RCBs, dtype=np.complex128),
             n_LCBs=n_LCBs,
             n_RCBs=n_RCBs,
-            n_LCs=n_LCs,
-            n_RCs=n_RCs
+            n_DsL=n_DsL,
+            n_DsR=n_DsR
         )
         del self._hm  # to save memory, no longer needed
         return consts
@@ -229,17 +228,17 @@ class AGF:
         # calculate self energy matrices
         I_D = self._const.I_D
 
-        n_LCs = self._const.n_LCs
+        n_DsL = self._const.n_DsL
         seL = I_D.copy()
         t_LCs_D = self._const.t_LCs_D
         t_D_LCs = self._const.t_D_LCs
-        seL[-n_LCs:, -n_LCs:] = t_D_LCs @ gLs @ t_LCs_D
+        seL[-n_DsL:, -n_DsL:] = t_D_LCs @ gLs @ t_LCs_D
 
-        n_RCs = self._const.n_RCs
+        n_DsR = self._const.n_DsR
         seR = I_D.copy()
         t_RCs_D = self._const.t_RCs_D
         t_D_RCs = self._const.t_D_RCs
-        seR[:n_RCs, :n_RCs] = t_D_RCs @ gRs @ t_RCs_D
+        seR[:n_DsR, :n_DsR] = t_D_RCs @ gRs @ t_RCs_D
 
         # compute the 'device' Green's function
         w2I_D = omega**2 * I_D
