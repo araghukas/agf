@@ -6,7 +6,7 @@ from agf.structure import Section
 from agf.agf import AGF
 from agf.hm import HarmonicMatrix
 
-__version__ = "2021.1"
+__version__ = "2021.2"
 
 
 def disable_log():
@@ -19,11 +19,11 @@ def enable_log():
 
 def get_solver(atom_positions_file: str,
                layer_map_file: str,
-               force_constants_file: str,
+               harmonic_constants_file: str,
                layer_assignments: Dict[Union[int, Section], Sequence[int]],
                sort_atoms: bool = True,
                atoms_sort_coordinate: Union[int, int] = 2,
-               sort_force_constants: bool = True,
+               sort_harmonic_constants: bool = True,
                atom_dof: int = 3,
                log_progress: bool = True) -> AGF:
     """
@@ -31,19 +31,19 @@ def get_solver(atom_positions_file: str,
 
     :param atom_positions_file: path to file containing atom positions
     :param layer_map_file: path to layer map file
-    :param force_constants_file: path to force constants for every atom by ID
+    :param harmonic_constants_file: path to harmonic constants for every atom by ID
     :param layer_assignments: a each section to layer indices
     :param sort_atoms: sort the atoms by the atom sort coordinate within every layer
     :param atoms_sort_coordinate: first, second, or third cartesian coordinate
-    :param sort_force_constants: sort force constants into same ID order as layers
+    :param sort_harmonic_constants: sort harmonic constants into same ID order as layers
     :param atom_dof: number of degrees of freedom per atom
     :param log_progress: print AGF progress messages
     :return: an AGF instance, ready to compute Green's functions.
     """
     from agf.structure import read_atoms
     from agf.hm import (sort_atoms_in_layers,
-                        read_force_constants,
-                        sort_force_constants_by_layer)
+                        read_harmonic_constants,
+                        sort_harmonic_constants_by_layer)
 
     if not log_progress:
         disable_log()
@@ -52,10 +52,10 @@ def get_solver(atom_positions_file: str,
         AGF.print("sorting atoms by coordinate")
         layers = sort_atoms_in_layers(layers, atoms_sort_coordinate)
 
-    fcs = read_force_constants(force_constants_file, atom_dof)
-    if sort_force_constants:
-        AGF.print("sorting force constants by layer")
-        fcs = sort_force_constants_by_layer(fcs, layers)
+    fcs = read_harmonic_constants(harmonic_constants_file, atom_dof)
+    if sort_harmonic_constants:
+        AGF.print("sorting harmonic constants by layer")
+        fcs = sort_harmonic_constants_by_layer(fcs, layers)
 
     matrix = HarmonicMatrix(fcs, layers)
     model = AGF(matrix, layer_assignments)
@@ -65,11 +65,11 @@ def get_solver(atom_positions_file: str,
 def compute_transmission(omegas: Sequence[float],
                          atom_positions_file: str,
                          layer_map_file: str,
-                         force_constants_file: str,
+                         harmonic_constants_file: str,
                          layer_assignments: Dict[Union[int, Section], Sequence[int]],
                          sort_atoms: bool = True,
                          atoms_sort_coordinate: Union[int, int] = 2,
-                         sort_force_constants: bool = True,
+                         sort_harmonic_constants: bool = True,
                          atom_dof: int = 3,
                          log_progress: bool = True,
                          delta_func: Callable[[float], float] = None,
@@ -82,11 +82,11 @@ def compute_transmission(omegas: Sequence[float],
     :param omegas: frequencies at which to compute
     :param atom_positions_file: path to file containing atom positions
     :param layer_map_file: path to layer map file
-    :param force_constants_file: path to force constants for every atom by ID
+    :param harmonic_constants_file: path to harmonic constants for every atom by ID
     :param layer_assignments: a each section to layer indices
     :param sort_atoms: sort the atoms by the atom sort coordinate within every layer
     :param atoms_sort_coordinate: first, second, or third cartesian coordinate
-    :param sort_force_constants: sort force constants into same ID order as layers
+    :param sort_harmonic_constants: sort harmonic constants into same ID order as layers
     :param atom_dof: number of degrees of freedom per atom
     :param log_progress: print AGF progress messages
     :param delta_func: function that returns broadening at each frequency
@@ -100,11 +100,11 @@ def compute_transmission(omegas: Sequence[float],
 
     model = get_solver(atom_positions_file,
                        layer_map_file,
-                       force_constants_file,
+                       harmonic_constants_file,
                        layer_assignments,
                        sort_atoms,
                        atoms_sort_coordinate,
-                       sort_force_constants,
+                       sort_harmonic_constants,
                        atom_dof,
                        log_progress)
 

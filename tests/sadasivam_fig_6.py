@@ -14,20 +14,20 @@ from typing import Iterable
 import numpy as np
 
 # constants
-fc = 25.  # N/m
+hc = 25.  # N/m
 fd = 50.  # N/m
-fcd = (fc + fd) / 2
+hcd = (hc + fd) / 2
 mc = md = 20. * m_u  # kg
 l0 = 5.5e-10  # m
 
 
-def get_sadasivam_fcs() -> np.ndarray:
+def get_sadasivam_hcs() -> np.ndarray:
     """construct the total harmonic matrix"""
-    f00 = 2 * fc / mc
-    f10 = -fc / mc
-    f11 = (fc + fcd) / mc
-    f12 = -fcd / sqrt(mc * md)
-    f22 = (fd + fcd) / md
+    f00 = 2 * hc / mc
+    f10 = -hc / mc
+    f11 = (hc + hcd) / mc
+    f12 = -hcd / sqrt(mc * md)
+    f22 = (fd + hcd) / md
     f23 = -fd / md
     f33 = 2. * fd / md
 
@@ -80,8 +80,8 @@ def main(n_omegas: int = 300):
     from agf.utility import fold_matrix
 
     # initialize the harmonic matrix
-    fcs = get_sadasivam_fcs()
-    fcs = fold_matrix(fcs, 1, 1)  # need shape (N,N,d,d)
+    hcs = get_sadasivam_hcs()
+    hcs = fold_matrix(hcs, 1, 1)  # need shape (N,N,d,d)
     layers = [
         Layer(-6, [Atom(1, 1, np.array([0., 0., -6.]))]),
         Layer(-5, [Atom(1, 1, np.array([0., 0., -5.]))]),
@@ -93,7 +93,7 @@ def main(n_omegas: int = 300):
         Layer(1, [Atom(1, 1, np.array([0., 0., 1.]))]),
         Layer(2, [Atom(1, 1, np.array([0., 0., 2.]))])
     ]
-    hm = HarmonicMatrix(fcs, layers)
+    hm = HarmonicMatrix(hcs, layers)
 
     # initialize an AGF solver
     layer_assignments = {

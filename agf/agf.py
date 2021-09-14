@@ -121,7 +121,7 @@ class AGF:
     def _get_compute_constants(self):
         """pre-compute constant values for efficiency"""
         self.print("pre-computing constant values")
-        n_dof = self._hm.force_constants.shape[-1]
+        n_dof = self._hm.harmonic_constants.shape[-1]
         layers_LCB = [self._hm.layers[i] for i in self._lass[Section.LCB]]
         layers_RCB = [self._hm.layers[i] for i in self._lass[Section.RCB]]
         n_LCBs = n_dof * len(layers_LCB[-1])
