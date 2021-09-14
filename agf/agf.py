@@ -80,7 +80,6 @@ class AGF:
     def __init__(self,
                  harmonic_matrix: HarmonicMatrix,
                  layer_assignments: Dict[Union[int, Section], Sequence[int]]):
-        self._sections = {s: None for s in Section}
         self._hm = harmonic_matrix
         self.layer_assignments = layer_assignments
 
