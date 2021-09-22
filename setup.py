@@ -8,6 +8,7 @@ setup(
     url="https://github.com/araghukas/agf.git",
     author_email="ghukasa@mcmaster.ca",
     author="Ara Ghukasyan",
+    license="MIT",
     install_requires=["numpy", "numba"],
     packages=find_packages()
 )
