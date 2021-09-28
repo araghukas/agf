@@ -44,8 +44,8 @@ class AGF:
         t_D_RCs: np.ndarray
 
         I_D: np.ndarray  # identity matrix for unfolded D
-        I_LCBs: np.ndarray  # identity matrix for unfolded LCB
-        I_RCBs: np.ndarray
+        I_LCs: np.ndarray  # identity matrix for unfolded LCB
+        I_RCs: np.ndarray
 
         n_LCBs: int  # unfolded LCB surface matrix size
         n_RCBs: int
@@ -123,9 +123,15 @@ class AGF:
         n_dof = self._hm.harmonic_constants.shape[-1]
         layers_LCB = [self._hm.layers[i] for i in self._lass[Section.LCB]]
         layers_RCB = [self._hm.layers[i] for i in self._lass[Section.RCB]]
-        layers_D = [self._hm.layers[i] for i in self._lass[Section.D]]
         n_LCBs = n_dof * len(layers_LCB[-1])
         n_RCBs = n_dof * len(layers_RCB[0])
+
+        layers_LC = [self._hm.layers[i] for i in self._lass[Section.LC]]
+        layers_RC = [self._hm.layers[i] for i in self._lass[Section.RC]]
+        layers_D = [self._hm.layers[i] for i in self._lass[Section.D]]
+        n_LCs = n_dof * len(layers_LC[-1])
+        n_RCs = n_dof * len(layers_RC[0])
+
         H_D = self._get_matrix(Section.D)
         n_D = H_D.shape[0] * n_dof
         n_DsL = n_dof * len(layers_D[0])
@@ -170,8 +176,8 @@ class AGF:
             t_RCs_D=unfold_matrix(t_RCs_D),
             t_D_RCs=unfold_matrix(t_D_RCs),
             I_D=np.eye(n_D, dtype=np.complex128),
-            I_LCBs=np.eye(n_LCBs, dtype=np.complex128),
-            I_RCBs=np.eye(n_RCBs, dtype=np.complex128),
+            I_LCs=np.eye(n_LCs, dtype=np.complex128),
+            I_RCs=np.eye(n_RCs, dtype=np.complex128),
             n_LCBs=n_LCBs,
             n_RCBs=n_RCBs,
             n_DsL=n_DsL,
@@ -212,18 +218,18 @@ class AGF:
 
         # calculate uncoupled Green's functions
         g_LCBs = np.linalg.inv(dec_L.Ws)
-        w2I_LCBs = (omega**2 + 1.j * delta) * self._const.I_LCBs
+        w2I_LCs = (omega**2 + 1.j * delta) * self._const.I_LCs
         H_LC = self._const.H_LC
         t_LC_LCBs = self._const.t_LC_LCBs
         t_LCBs_LC = self._const.t_LCBs_LC
-        gLs = np.linalg.inv(w2I_LCBs - H_LC - t_LCBs_LC @ g_LCBs @ t_LC_LCBs)
+        gLs = np.linalg.inv(w2I_LCs - H_LC - t_LC_LCBs @ g_LCBs @ t_LCBs_LC)
 
         g_RCBs = np.linalg.inv(dec_R.Ws)
-        w2I_RCBs = (omega**2 + 1.j * delta) * self._const.I_RCBs
+        w2I_RCs = (omega**2 + 1.j * delta) * self._const.I_RCs
         H_RC = self._const.H_RC
         t_RC_RCBs = self._const.t_RC_RCBs
         t_RCBs_RC = self._const.t_RCBs_RC
-        gRs = np.linalg.inv(w2I_RCBs - H_RC - t_RCBs_RC @ g_RCBs @ t_RC_RCBs)
+        gRs = np.linalg.inv(w2I_RCs - H_RC - t_RC_RCBs @ g_RCBs @ t_RCBs_RC)
 
         # calculate self energy matrices
         I_D = self._const.I_D
