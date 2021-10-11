@@ -101,6 +101,7 @@ def compute_transmission(omegas: Sequence[float],
      """
     from numpy import zeros, asarray
 
+    AGF.print("getting solver")
     model = get_solver(atom_positions_file,
                        layer_map_file,
                        harmonic_constants_file,
@@ -125,22 +126,37 @@ def compute_transmission(omegas: Sequence[float],
         )
 
     n_omegas = len(omegas)
-
     omegas = asarray(omegas)
     deltas = delta_func(omegas, **delta_func_kwargs)
     trans = zeros(n_omegas)
 
     i = 0
-    with open(expanduser(results_savename), 'w') as output_file:
-        output_file.write(",omega,transmission\n")
-        AGF.print("\nindex, omega, transmission")
+    AGF.print("\nindex, omega, transmission")
+    for omega, delta in zip(omegas, deltas):
+        result = model.compute(omega, delta)
+        trans[i] = result.transmission
+        AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e}".format(i, omega, trans[i]))
+        i += 1
+
+    try:
+        # write the transmission CSV file
+        with open(expanduser(results_savename), 'w') as output_file:
+            output_file.write(",omega,transmission\n")
+            i = 0
+            for omega, delta in zip(omegas, deltas):
+                output_file.write("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
+                i += 1
+            output_file.write("\n")
+    except FileNotFoundError:
+        # print the transmission results
+        warnings.warn(
+            f"could not open file '${results_savename}' -- dumping transmission result.\n"
+        )
+        i = 0
+        print(",omega,transmission\n")
         for omega, delta in zip(omegas, deltas):
-            result = model.compute(omega, delta)
-            tr = result.transmission
-            output_file.write("{:d},{:f},{:f}\n".format(i, omega, tr))
-            AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e}".format(i, omega, tr))
-            trans[i] = tr
+            print("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
             i += 1
-        output_file.write("\n")
+        print("\n")
 
     return trans
