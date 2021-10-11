@@ -48,17 +48,21 @@ def get_solver(atom_positions_file: str,
 
     if not log_progress:
         disable_log()
+    AGF.print("reading atoms and layer map")
     layers = read_atoms(atom_positions_file, layer_map_file)
     if sort_atoms:
         AGF.print("sorting atoms by coordinate")
         layers = sort_atoms_in_layers(layers, atoms_sort_coordinate)
 
+    AGF.print("reading harmonic constants")
     hcs = read_harmonic_constants(harmonic_constants_file, atom_dof)
     if sort_harmonic_constants:
         AGF.print("sorting harmonic constants by layer")
         hcs = sort_harmonic_constants_by_layer(hcs, layers)
 
+    AGF.print("creating harmonic matrix")
     matrix = HarmonicMatrix(hcs, layers)
+    AGF.print("initializing model")
     model = AGF(matrix, layer_assignments)
     return model
 
