@@ -9,6 +9,6 @@ setup(
     author_email="ghukasa@mcmaster.ca",
     author="Ara Ghukasyan",
     license="MIT",
-    install_requires=["numpy", "numba"],
+    install_requires=["numpy"],
     packages=find_packages()
 )
