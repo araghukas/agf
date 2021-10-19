@@ -130,33 +130,18 @@ def compute_transmission(omegas: Sequence[float],
     deltas = delta_func(omegas, **delta_func_kwargs)
     trans = zeros(n_omegas)
 
+    output_filename = expanduser(results_savename)
     i = 0
     AGF.print("\nindex, omega, transmission")
+    with open(output_filename, 'w') as output_file:
+        output_file.write(",omega,transmission\n")
+
     for omega, delta in zip(omegas, deltas):
         result = model.compute(omega, delta)
         trans[i] = result.transmission
         AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e}".format(i, omega, trans[i]))
+        with open(output_filename, 'a') as output_file:
+            output_file.write("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
         i += 1
-
-    try:
-        # write the transmission CSV file
-        with open(expanduser(results_savename), 'w') as output_file:
-            output_file.write(",omega,transmission\n")
-            i = 0
-            for omega, delta in zip(omegas, deltas):
-                output_file.write("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
-                i += 1
-            output_file.write("\n")
-    except FileNotFoundError:
-        # print the transmission results
-        warnings.warn(
-            f"could not open file '${results_savename}' -- dumping transmission result.\n"
-        )
-        i = 0
-        print(",omega,transmission\n")
-        for omega, delta in zip(omegas, deltas):
-            print("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
-            i += 1
-        print("\n")
 
     return trans
