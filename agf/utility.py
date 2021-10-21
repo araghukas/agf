@@ -4,7 +4,7 @@ from typing import Sequence
 import numpy as np
 
 
-@njit(parallel=True)
+@njit
 def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     """fold a shape (M,N) matrix to shape (m,n,p,q) where m=M/p and n=N/q"""
     M, N = arr.shape
@@ -21,7 +21,7 @@ def fold_matrix(arr: np.ndarray, p: int, q: int) -> np.ndarray:
     return new_arr
 
 
-@njit(parallel=True)
+@njit
 def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     """unfold a shape (m,n,p,q) matrix to shape (M,N) where M=p*m and N=q*n"""
     m, n, p, q = arr.shape
@@ -39,7 +39,7 @@ def unfold_matrix(arr: np.ndarray) -> np.ndarray:
     return new_arr
 
 
-@njit(parallel=True)
+@njit
 def extract_matrix(row_index: np.ndarray, col_index: np.ndarray, arr: np.ndarray) -> np.ndarray:
     """extract all elements in row_index x col_index, from arr into a new array"""
     m = row_index.shape[0]

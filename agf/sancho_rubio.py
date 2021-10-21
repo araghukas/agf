@@ -66,7 +66,7 @@ def decimate(arr: np.ndarray,
     return DecimationResult(Ws, Wb, a, b)
 
 
-@njit(parallel=True)
+@njit
 def _homogeneous_decimation(omega: np.ndarray,
                             a: np.ndarray,
                             b: np.ndarray,
