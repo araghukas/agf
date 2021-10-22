@@ -85,7 +85,11 @@ class AGF:
 
         self._validate_assignments()
         self._const = self._get_compute_constants()
+
+        # TODO: remove debug code
         self._compute_calls = 0
+        for k, v in vars(self._const).items():
+            self._describe_arr(v, k)
 
     def _validate_assignments(self) -> None:
         """check matrix/section assignments for incompatible values"""
@@ -232,19 +236,6 @@ class AGF:
         t_RCBs_RC = self._const.t_RCBs_RC
         gRs = np.linalg.inv(w2I_RCs - H_RC - t_RC_RCBs @ g_RCBs @ t_RCBs_RC)
 
-        self._describe_arr(g_LCBs, 'g_LCBs')
-        self._describe_arr(g_RCBs, 'g_RCBs')
-        self._describe_arr(w2I_LCs, 'w2I_LCs')
-        self._describe_arr(w2I_RCs, 'w2I_Rcs')
-        self._describe_arr(H_LC, 'H_LC')
-        self._describe_arr(H_RC, 'H_RC')
-        self._describe_arr(t_LC_LCBs, 't_LC_LCBs')
-        self._describe_arr(t_RC_RCBs, 't_RC_RCBs')
-        self._describe_arr(t_LCBs_LC, 't_LCBs_LC')
-        self._describe_arr(t_RCBs_RC, 't_RCBs_RC')
-        self._describe_arr(gLs, 'gLs')
-        self._describe_arr(gRs, 'gRs')
-
         # calculate self energy matrices
         I_D = self._const.I_D
 
@@ -264,12 +255,10 @@ class AGF:
         w2I_D = omega**2 * I_D
         H_D = self._const.H_D
         G = np.linalg.solve(w2I_D - H_D - seL - seR, self._const.I_D)
-        self._describe_arr(G, 'G')
 
         M1 = 1.j * (seL - seL.conj().T)
         M2 = 1.j * (seR - seR.conj().T)
 
-        self._compute_calls += 1
         return GreensFunctionMatrix(omega, delta, G, M1, M2)
 
     @staticmethod
@@ -278,6 +267,7 @@ class AGF:
         if AGF.PRINT_LOG:
             print(s)
 
+    # TODO: remove debug code
     def _describe_arr(self, arr: np.ndarray, name: str) -> None:
         """
         DEBUG METHOD
