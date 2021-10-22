@@ -88,7 +88,7 @@ def _homogeneous_decimation(omega: np.ndarray,
         a = a @ g @ a
 
         # update tolerance value
-        tol = np.linalg.norm(a)
+        tol = np.linalg.norm(a) + np.linalg.norm(b)
 
     Ws = omega - eps_s
     Wb = omega - eps
