@@ -6,7 +6,6 @@ See:
     Sancho, M. P. L. et al., Journal of Physics F: Metal Physics 15 (4): 851–58 (1985)
 """
 import numpy as np
-# from numba import njit
 
 from typing import Tuple
 from dataclasses import dataclass
@@ -66,7 +65,6 @@ def decimate(arr: np.ndarray,
     return DecimationResult(Ws, Wb, a, b)
 
 
-# @njit
 def _homogeneous_decimation(omega: np.ndarray,
                             a: np.ndarray,
                             b: np.ndarray,
