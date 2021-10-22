@@ -249,7 +249,7 @@ class AGF:
         # compute the 'device' Green's function
         w2I_D = omega**2 * I_D
         H_D = self._const.H_D
-        G = np.linalg.inv(w2I_D - H_D - seL - seR)
+        G = np.linalg.solve(w2I_D - H_D - seL - seR, self._const.I_D)
 
         M1 = 1.j * (seL - seL.conj().T)
         M2 = 1.j * (seR - seR.conj().T)
