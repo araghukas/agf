@@ -122,7 +122,7 @@ class AGF:
         if not np.linalg.norm(H_D_RCB) == 0.0:
             warnings.warn("D-RCB interaction is non-zero.")
 
-    def _get_compute_constants(self):
+    def _get_compute_constants(self) -> _ComputeConstants:
         """pre-compute constant values for efficiency"""
         self.print("pre-computing constant values")
         n_dof = self._hm.harmonic_constants.shape[-1]
