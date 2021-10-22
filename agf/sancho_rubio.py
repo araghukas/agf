@@ -35,7 +35,7 @@ def decimate(arr: np.ndarray,
     :param omega: angular frequency
     :param delta: frequency broadening
     :param layer_size: number of atoms per layers times the number of degrees of freedom.
-    :param abs_tol: convergence tolerance for norm of connection matrix (default 1e-6)
+    :param abs_tol: convergence tolerance for norms of connection matrices (default 1e-6)
     :param homogeneous: assume the matrix has repeating elements (i.e. layers).
     :param flip: flip the matrix before decimation
     :return: the effective surface and bulk matrices (Iw**2 - H)
