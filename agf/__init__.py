@@ -23,7 +23,7 @@ def get_solver(atom_positions_file: str,
                harmonic_constants_file: str,
                layer_assignments: Dict[Union[int, Section], Sequence[int]],
                sort_atoms: bool = True,
-               atoms_sort_coordinate: Union[int, int] = 2,
+               atoms_sort_coordinate: int = 2,
                sort_harmonic_constants: bool = True,
                atom_dof: int = 3,
                log_progress: bool = True) -> AGF:
