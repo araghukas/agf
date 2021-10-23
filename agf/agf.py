@@ -86,11 +86,6 @@ class AGF:
         self._validate_assignments()
         self._const = self._get_compute_constants()
 
-        # TODO: remove debug code
-        self._compute_calls = 0
-        for k, v in vars(self._const).items():
-            self._describe_arr(v, k)
-
     def _validate_assignments(self) -> None:
         """check matrix/section assignments for incompatible values"""
         self.print("validating sections and matrices")
@@ -266,24 +261,6 @@ class AGF:
         """optional logging of progress"""
         if AGF.PRINT_LOG:
             print(s)
-
-    # TODO: remove debug code
-    def _describe_arr(self, arr: np.ndarray, name: str) -> None:
-        """
-        DEBUG METHOD
-
-        print descriptive values about an array
-        """
-        prepend = f"{name}({self._compute_calls})"
-        print(f"{prepend}-norm: {np.linalg.norm(arr)}")
-        print(f"{prepend}-max: {np.max(arr)}")
-        print(f"{prepend}-min: {np.min(arr)}")
-        print(f"{prepend}-average: {np.average(arr)}")
-        try:
-            print(f"{prepend}-condition: {np.linalg.cond(arr)}")
-        except np.linalg.LinAlgError:
-            print("failed to compute condition number!")
-        print("----------")
 
 
 @dataclass(frozen=True)
