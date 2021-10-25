@@ -128,20 +128,24 @@ def compute_transmission(omegas: Sequence[float],
     n_omegas = len(omegas)
     omegas = asarray(omegas)
     deltas = delta_func(omegas, **delta_func_kwargs)
-    trans = zeros(n_omegas)
+    trans_arr = zeros(n_omegas)
 
     output_filename = expanduser(results_savename)
     i = 0
-    AGF.print("\nindex, omega, transmission")
+    AGF.print("\nindex, omega, delta, condition, transmission")
     with open(output_filename, 'w') as output_file:
-        output_file.write(",omega,transmission\n")
+        output_file.write(",omega,delta,condition,transmission\n")
 
     for omega, delta in zip(omegas, deltas):
         result = model.compute(omega, delta)
-        trans[i] = result.transmission
-        AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e}".format(i, omega, trans[i]))
+        trans = result.transmission
+        cond = result.condition
+        AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e} {:<12,.6e} {:<12,.6e}"
+                  .format(i, omega, delta, cond, trans))
         with open(output_filename, 'a') as output_file:
-            output_file.write("{:d},{:f},{:f}\n".format(i, omega, trans[i]))
+            output_file.write("{:d},{:f},{:f},{:f},{:f}\n"
+                              .format(i, omega, delta, cond, trans))
+        trans_arr[i] = trans
         i += 1
 
-    return trans
+    return trans_arr
