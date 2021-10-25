@@ -279,9 +279,4 @@ class GreensFunctionMatrix:
     @property
     def transmission(self) -> float:
         """transmission function at omega"""
-        trans = np.trace(self.M1 @ self.G @ self.M2 @ self.G.conj().T)
-        return float(trans.real)
-
-    @property
-    def dos(self) -> np.ndarray:
-        return 1.j * self.omega / np.pi * (self.G - self.G.conj().T)
+        return np.trace(self.M1 @ self.G @ self.M2 @ self.G.conj().T).real
