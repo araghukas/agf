@@ -7,7 +7,7 @@ from agf.structure import Section
 from agf.agf import AGF
 from agf.hm import HarmonicMatrix
 
-__version__ = "2021.10"
+__version__ = "2021.10.1"
 
 
 def disable_log():
@@ -79,6 +79,7 @@ def compute_transmission(omegas: Sequence[float],
                          log_progress: bool = True,
                          delta_func: Callable[[float], float] = None,
                          delta_func_kwargs: dict = None,
+                         omega_start_index: int = 0,
                          results_savename: str = None) -> ndarray:
     """
     Compute the transmission over several angular frequencies and return the result.
@@ -95,6 +96,7 @@ def compute_transmission(omegas: Sequence[float],
     :param log_progress: print AGF progress messages
     :param delta_func: function that returns broadening at each frequency
     :param delta_func_kwargs: dictionary of keyword arguments passed to `delta_func`
+    :param omega_start_index: starting index of the frequencies in the output
     :param results_savename: name of the results file
 
     :return: array of transmission values
@@ -131,7 +133,8 @@ def compute_transmission(omegas: Sequence[float],
     trans_arr = zeros(n_omegas)
 
     output_filename = expanduser(results_savename)
-    i = 0
+    i_print = omega_start_index
+    i_arr = 0
     AGF.print("\nindex, omega, delta, condition, transmission")
     with open(output_filename, 'w') as output_file:
         output_file.write(",omega,delta,condition,transmission\n")
@@ -141,11 +144,12 @@ def compute_transmission(omegas: Sequence[float],
         trans = result.transmission
         cond = result.condition
         AGF.print("{:<4,d} {:<12,.6e} {:<12,.6e} {:<12,.6e} {:<12,.6e}"
-                  .format(i, omega, delta, cond, trans))
+                  .format(i_print, omega, delta, cond, trans))
         with open(output_filename, 'a') as output_file:
             output_file.write("{:d},{:f},{:f},{:f},{:f}\n"
-                              .format(i, omega, delta, cond, trans))
-        trans_arr[i] = trans
-        i += 1
+                              .format(i_print, omega, delta, cond, trans))
+        trans_arr[i_arr] = trans
+        i_print += 1
+        i_arr += 1
 
     return trans_arr
