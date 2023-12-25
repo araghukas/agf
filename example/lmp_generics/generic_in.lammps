@@ -1,0 +1,21 @@
+# must declare `data_file`
+# must declare `output_file`
+# must declare `potential_file`
+
+units metal
+
+boundary p p p
+
+box tilt large
+
+atom_style atomic
+read_data ${data_file}
+read_dump ${output_file} 0 x y z box yes
+
+mass 1 69.723   # Ga
+mass 2 74.9216  # As 
+
+pair_style tersoff
+pair_coeff * * ${potential_file} Ga As
+
+neighbor 0.3 bin
